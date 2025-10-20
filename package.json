@@ -1,0 +1,132 @@
+{
+  "name": "zabbix-template-publisher",
+  "displayName": "Zabbix Template Publisher",
+  "description": "Publish Zabbix monitoring templates from properties to NextCloud and Zabbix",
+  "version": "1.0.0",
+  "publisher": "shon-chen",
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "zabbix",
+    "monitoring",
+    "template",
+    "nextcloud",
+    "prometheus"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "zabbix-template-publisher.publish",
+        "title": "Publish Zabbix Template",
+        "category": "Zabbix"
+      },
+      {
+        "command": "zabbix-template-publisher.testConnection",
+        "title": "Test NextCloud Connection",
+        "category": "Zabbix"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "zabbix-template-publisher.publish",
+          "when": "resourceExtname == .properties || resourceExtname == .xml",
+          "group": "zabbix"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "zabbix-template-publisher.publish",
+          "when": "resourceExtname == .properties || resourceExtname == .xml",
+          "group": "zabbix"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "zabbix-template-publisher.publish",
+        "key": "ctrl+shift+z",
+        "mac": "cmd+shift+z",
+        "when": "editorTextFocus && (resourceExtname == .properties || resourceExtname == .xml)"
+      }
+    ],
+    "configuration": {
+      "title": "Zabbix Template Publisher",
+      "properties": {
+        "zabbix-template-publisher.nextcloud.url": {
+          "type": "string",
+          "default": "",
+          "description": "NextCloud服务器URL (例如: https://your-nextcloud.com)"
+        },
+        "zabbix-template-publisher.nextcloud.username": {
+          "type": "string",
+          "default": "",
+          "description": "NextCloud登录用户名（用于认证）"
+        },
+        "zabbix-template-publisher.nextcloud.webdavUsername": {
+          "type": "string",
+          "default": "",
+          "description": "NextCloud WebDAV文件空间用户名（可选，如果与登录用户名不同，如 chengang_3074）"
+        },
+        "zabbix-template-publisher.nextcloud.password": {
+          "type": "string",
+          "default": "",
+          "description": "NextCloud应用专用密码"
+        },
+        "zabbix-template-publisher.nextcloud.basePath": {
+          "type": "string",
+          "default": "/云平台开发部/监控模板",
+          "description": "NextCloud存储基础路径"
+        },
+        "zabbix-template-publisher.version": {
+          "type": "string",
+          "default": "",
+          "description": "版本号 (留空则自动从pom.xml读取)"
+        },
+        "zabbix-template-publisher.zabbix.url": {
+          "type": "string",
+          "default": "",
+          "description": "Zabbix服务器URL (可选，用于自动导入测试环境)"
+        },
+        "zabbix-template-publisher.zabbix.username": {
+          "type": "string",
+          "default": "",
+          "description": "Zabbix用户名 (可选)"
+        },
+        "zabbix-template-publisher.zabbix.password": {
+          "type": "string",
+          "default": "",
+          "description": "Zabbix密码 (可选)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@types/xml2js": "^0.4.11",
+    "@typescript-eslint/eslint-plugin": "^5.0.0",
+    "@typescript-eslint/parser": "^5.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "xml2js": "^0.6.0"
+  }
+}
+

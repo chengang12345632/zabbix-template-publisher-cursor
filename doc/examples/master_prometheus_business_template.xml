@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2025-10-18T10:01:43Z</date>
+    <groups>
+        <group>
+            <name>business_monitor</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>master_prometheus_business_template</template>
+            <name>master_prometheus_business_template</name>
+            <groups>
+                <group>
+                    <name>business_monitor</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>Prometheus</name>
+                </application>
+            </applications>
+            <macros>
+                <macro>
+                    <macro>{$EXPORTTOOL_URL}</macro>
+                    <value>127.0.0.1:21746</value>
+                    <description>ExporterTool接口URL</description>
+                </macro>
+            </macros>
+            <items>
+                <item>
+                    <name>master-prometheus-metadata</name>
+                    <type>ZABBIX_ACTIVE</type>
+                    <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    <delay>5m</delay>
+                    <value_type>TEXT</value_type>
+                    <history>30d</history>
+                    <trends>0</trends>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                </item>
+            </items>
+        </template>
+    </templates>
+</zabbix_export>
+
