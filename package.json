@@ -2,7 +2,7 @@
   "name": "zabbix-template-publisher",
   "displayName": "Zabbix Template Publisher",
   "description": "Publish Zabbix monitoring templates from properties to NextCloud and Zabbix",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "shon-chen",
   "icon": "icon.png",
   "repository": {
