@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且遵守 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.2] - 2025-10-21
+
+### 文档优化
+
+- 📝 增加开发环境主机绑定操作详细说明
+  - 添加登录Zabbix测试环境步骤
+  - 添加查找目标主机步骤
+  - 添加链接监控模板详细操作
+  - 添加数据采集验证步骤
+- 📖 增加Kafka消息字段映射注释
+  - `zabbix.items[0].name` 对应 Kafka 消息 `n (domain)` 字段
+  - `zabbix.discovery_rules[0].lld_macros` 对应 Kafka 消息 `l (label)` 字段
+- 🎯 优化步骤4标题，去除"（生产环境）"后缀
+
+### 改进
+
+- ✨ 完善测试环境自助验证流程
+- 📚 提高文档可读性和实用性
+
 ## [1.0.0] - 2025-10-18
 
 ### 新增功能
