@@ -117,7 +117,7 @@ graph TD
     "e": "COUNTER", // type (指标类型, 必填)
     "d": [ // data (指标数据, 必填), data的数据集大小应该有边界限制
       {
-        "labels": { // 指标标签, 必填, label格式: <label name>: <label value>), 指标名与值采驼峰形式
+        "l": { // 指标标签, 必填, label格式: <label name>: <label value>), 指标名与值采驼峰形式
           "source": "10.0.0.1", // 指标数据来源的内网IP (必填)
           "tenantId": 1, // 租户ID (非必填)
           "appId": 10001, // 应用ID (非必填)
@@ -126,7 +126,7 @@ graph TD
         "v": 10 // value 监控指标值 (必填) 比如, 当前labels代表为证据下载成功量
       },
       {
-        "labels": {
+        "l": {
           "source": "10.0.0.1",
           "tenantId": 1,
           "appId": 10001,
@@ -207,7 +207,7 @@ public enum MetricType {
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `labels` | HashMap | 是 | 指标标签集合，键值对形式，用于描述指标的维度 |
+| `l` | HashMap | 是 | 指标标签集合，键值对形式，用于描述指标的维度 |
 | `v` (value) | Number | 是 | 监控指标的具体数值 |
 
 #### 常用标签字段
@@ -224,7 +224,7 @@ public enum MetricType {
 | 组件 | 职责 | 技术栈 | 输出 |
 |------|------|--------|------|
 | **业务组件** | 收集业务监控指标数据，推送到Kafka Topic | Java/其他 | Kafka消息（Topic: `starry_exporter_business_monitor`） |
-| **ExporterTool** | 消费Kafka数据，格式化为Prometheus格式 | C++ | Prometheus格式数据 |
+| **ExporterTool (S17的组件)** | 消费Kafka数据，格式化为Prometheus格式 | C++ | Prometheus格式数据 |
 | **Zabbix Agent** | 部署在业务主机上，用于Zabbix服务器采集监控数据。**注意：当前不支持CICD部署，需要联系运维人员部署** | Zabbix Agent | 主机监控数据 |
 | **Zabbix** | 定时拉取监控数据，存储和展示 | Zabbix | 监控图表和告警 |
 
@@ -357,6 +357,7 @@ zabbix.templates[0].name="master_prometheus_business_template"
 
 # 业务监控项配置
 # 更新管理员信息调度任务 - 监控更新管理员信息的定时任务执行情况
+# name 和 key 对应 Kafka 消息中的 n (domain) 字段：业务领域标识
 zabbix.items[0].name="ft_manager_app_update_admin_info_scheduler_task"
 zabbix.items[0].key="ft_manager_app_update_admin_info_scheduler_task"
 zabbix.items[0].type="DEPENDENT"
@@ -380,6 +381,7 @@ zabbix.discovery_rules[0].lifetime="3d"
 zabbix.discovery_rules[0].master_item="master.prometheus[{$EXPORTTOOL_URL}]"
 zabbix.discovery_rules[0].preprocessing_type="PROMETHEUS_TO_JSON"
 zabbix.discovery_rules[0].preprocessing_params="s17_dcs_dcsBusinessInfo{}"
+# lld_macros 对应 Kafka 消息中的 l (label) 字段：指标标签，用于多维度监控
 zabbix.discovery_rules[0].lld_macros="APPID,CATEGORY,METRIC_NAME,SOURCE,TENANTID"
 zabbix.discovery_rules[0].appName="base_alarm_service"
 # item_prototype配置
@@ -426,12 +428,36 @@ zabbix.discovery_rules[0].item_prototype.key="s17_dcs_dcsBusinessInfo[{#CATEGORY
 > - **运维人员**：负责维护主监控项模板到NextCloud
 > - **开发人员**：只需维护业务监控项 `.properties` 文件，插件自动处理转换、上传、导入
 
-#### 步骤4：联系运维链接模板（生产环境）
+#### 步骤4：联系运维链接模板
 
 **开发环境（测试）**：
-- 插件自动导入到Zabbix测试环境，可直接验证
+
+插件会自动导入模板到Zabbix测试环境，开发人员需要手动绑定主机进行验证：
+
+1. **登录Zabbix测试环境**
+   - 访问Zabbix测试环境URL
+   - 使用测试账号登录
+
+2. **找到目标主机**
+   - 进入 `配置` → `主机`
+   - 搜索并选择需要绑定的主机（通常是服务部署的主机）
+
+3. **链接监控模板**
+   - 点击主机名称进入编辑页面
+   - 切换到 `模板` 标签页
+   - 在"链接新模板"输入框中搜索并选择以下模板：
+     - `master_prometheus_business_template`（主监控项，首次必须链接）
+     - `{serviceName}_business_template`（业务监控项）
+   - 点击 `添加` → `更新` 保存配置
+
+4. **验证数据采集**
+   - 等待5-10分钟让Zabbix采集数据
+   - 进入 `监测` → `最新数据`
+   - 选择对应主机，查看监控项是否有数据
+   - 检查发现规则是否自动创建了监控项原型
 
 **生产环境（正式部署）**：
+
 1. 联系运维人员，提供模板名称：`{serviceName}_business_template`
 2. 运维人员从NextCloud下载模板并导入生产环境
 3. 运维人员在主机上链接以下模板：
@@ -443,6 +469,7 @@ zabbix.discovery_rules[0].item_prototype.key="s17_dcs_dcsBusinessInfo[{#CATEGORY
 > - 主监控项模板由运维统一管理，只需链接一次
 > - 每个组件的业务模板独立链接
 > - 模板名称与配置文件中的 `zabbix.template.name` 对应
+> - 开发环境可以自行绑定主机测试，生产环境需联系运维操作
 
 ## 文档资源
 
