@@ -203,25 +203,42 @@ export class XmlConverter {
                 xml += `                    <lifetime>${rule.lifetime}</lifetime>\n`;
             }
             
+            if (rule.description) {
+                xml += `                    <description>${this.escapeXml(rule.description)}</description>\n`;
+            }
+            
             // 监控项原型
             if (rule.itemPrototype) {
                 xml += '                    <item_prototypes>\n';
                 xml += '                        <item_prototype>\n';
                 xml += `                            <name>${this.escapeXml(rule.itemPrototype.name)}</name>\n`;
-                xml += '                            <type>DEPENDENT</type>\n';
+                xml += `                            <type>${rule.itemPrototype.type || 'DEPENDENT'}</type>\n`;
                 xml += `                            <key>${this.escapeXml(rule.itemPrototype.key)}</key>\n`;
-                xml += '                            <delay>0</delay>\n';
-                xml += '                            <value_type>FLOAT</value_type>\n';
+                xml += `                            <delay>${rule.itemPrototype.delay || '0'}</delay>\n`;
+                xml += `                            <value_type>${rule.itemPrototype.valueType || 'FLOAT'}</value_type>\n`;
+                
+                // 描述（如果有）
+                if (rule.itemPrototype.description) {
+                    xml += `                            <description>${this.escapeXml(rule.itemPrototype.description)}</description>\n`;
+                }
                 
                 // 应用
                 xml += '                            <applications>\n';
                 xml += '                                <application>\n';
-                xml += `                                    <name>${this.escapeXml(rule.appName || defaultAppName || '')}</name>\n`;
+                xml += `                                    <name>${this.escapeXml(rule.itemPrototype.appName || rule.appName || defaultAppName || '')}</name>\n`;
                 xml += '                                </application>\n';
                 xml += '                            </applications>\n';
                 
-                // 预处理（为item_prototype生成对应的Prometheus Pattern）
-                if (rule.lldMacros) {
+                // 预处理 - 优先使用item_prototype自己的preprocessing
+                if (rule.itemPrototype.preprocessing?.type && rule.itemPrototype.preprocessing?.params) {
+                    xml += '                            <preprocessing>\n';
+                    xml += '                                <step>\n';
+                    xml += `                                    <type>${rule.itemPrototype.preprocessing.type}</type>\n`;
+                    xml += `                                    <params>${this.escapeXml(rule.itemPrototype.preprocessing.params)}\n</params>\n`;
+                    xml += '                                </step>\n';
+                    xml += '                            </preprocessing>\n';
+                } else if (rule.lldMacros) {
+                    // 如果没有preprocessing，自动生成
                     const macros = rule.lldMacros.split(',').map(m => m.trim());
                     const metricName = rule.preprocessingParams?.replace(/\{\}$/, '').trim() || rule.key.replace('.discovery', '');
                     const labels = macros
@@ -235,15 +252,16 @@ export class XmlConverter {
                     xml += '                            <preprocessing>\n';
                     xml += '                                <step>\n';
                     xml += '                                    <type>PROMETHEUS_PATTERN</type>\n';
-                    xml += `                                    <params>${metricName}{${labels}}\n</params>\n`;
+                    xml += `                                    <params>${this.escapeXmlParams(metricName + '{' + labels + '}')}\n</params>\n`;
                     xml += '                                </step>\n';
                     xml += '                            </preprocessing>\n';
                 }
                 
-                // 主监控项
-                if (rule.masterItem) {
+                // 主监控项 - 优先使用item_prototype的masterItem
+                const protoMasterItem = rule.itemPrototype.masterItem || rule.masterItem;
+                if (protoMasterItem) {
                     xml += '                            <master_item>\n';
-                    xml += `                                <key>${this.escapeXml(rule.masterItem)}</key>\n`;
+                    xml += `                                <key>${this.escapeXml(protoMasterItem)}</key>\n`;
                     xml += '                            </master_item>\n';
                 }
                 
@@ -307,9 +325,25 @@ export class XmlConverter {
 
     /**
      * 将宏名称转换为标签名称
-     * 例如: APPID -> appId, TENANT_ID -> tenantId
+     * 例如: APPID -> appId, COUNTTYPE -> countType, TENANTID -> tenantId
      */
     private static macroToLabelName(macro: string): string {
+        // 特殊映射规则，确保与Prometheus数据中的标签名称一致
+        const specialMappings: { [key: string]: string } = {
+            'APPID': 'appId',
+            'COUNTTYPE': 'countType', 
+            'TENANTID': 'tenantId',
+            'METHOD': 'method',
+            'STATE': 'state',
+            'URL': 'url',
+            'SOURCE': 'source'
+        };
+        
+        if (specialMappings[macro]) {
+            return specialMappings[macro];
+        }
+        
+        // 默认转换规则
         const parts = macro.toLowerCase().split('_');
         return parts[0] + parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
     }
@@ -327,6 +361,19 @@ export class XmlConverter {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&apos;');
+    }
+
+    /**
+     * XML参数内容转义（不转义引号，因为参数内容中的引号是合法的）
+     */
+    private static escapeXmlParams(unsafe: string): string {
+        if (!unsafe) {
+            return '';
+        }
+        return unsafe
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 }
 

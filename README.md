@@ -251,21 +251,28 @@ ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafk
 
 ### 架构说明
 
-本系统采用**主从分离架构**，将主监控项和业务监控项分工维护：
+本系统采用**合并模板架构**，解决Zabbix模板依赖冲突问题：
 
-- `master_prometheus_business_template` - **主监控项配置**（由运维管理人员统一维护到NextCloud、Zabbix）
+#### 模板组成
+- `master_prometheus_business_template` - **主监控项模板**（由运维人员维护到NextCloud）
 - `{serviceName}_business_template.properties` - **业务监控项配置**（各组件项目维护）
+- `merged_business_template.xml` - **合并模板**（系统自动生成，包含所有监控项）
 
-**核心机制**：
-- **运维统一管理**：主监控项由运维人员提前维护到NextCloud、Zabbix，各组件无需维护
+#### 核心机制
+- **运维统一管理**：主监控项由运维人员维护到NextCloud的`zabbix_template_release/`目录
 - **组件独立开发**：各组件只需创建和维护业务监控项配置文件
-- **模板依赖关系**：业务模板通过 `master_item` 引用主监控项
-- **Zabbix智能导入**：插件自动检测主监控项是否存在，已存在则覆盖更新
+- **自动模板合并**：系统自动将主监控项和所有业务监控项合并为单一模板
+- **Dev/Release工作流**：开发测试与生产发布完全隔离
 
-**核心优势**：
-- ✅ 分工明确：运维管理主监控项，开发维护业务监控项
-- ✅ 零学习成本：各组件无需关注主监控项细节
-- ✅ 标准化配置：主监控项统一管理，避免不一致
+#### 解决的核心问题
+- ❌ **传统问题**：多个业务模板依赖同一个主模板时，Zabbix报错"模板不能重复链接"
+- ✅ **解决方案**：将所有模板合并为一个，消除依赖关系，避免冲突
+
+#### 核心优势
+- ✅ **零依赖冲突**：合并模板无依赖关系，可正常链接到主机
+- ✅ **分工明确**：运维管理主监控项，开发维护业务监控项
+- ✅ **零学习成本**：各组件无需关注主监控项细节
+- ✅ **自动化处理**：系统自动处理模板合并和冲突解决
 
 ### 快速开始
 
@@ -278,11 +285,10 @@ ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafk
 必填项：
 - NextCloud URL: `https://your-nextcloud.com`
 - Username: 登录用户名
-- Password: 应用专用密码（[创建方法](doc/cursor-plugin-guide.md#nextcloud配置)）
+- Password: 应用专用密码（[创建方法](doc/troubleshooting.md#q1-如何获取nextcloud应用专用密码)）
 
 可选项：
-- WebDAV Username: WebDAV文件空间用户名（[如何获取](doc/troubleshooting.md#2-nextcloud认证失败)，如与登录用户名不同）
-- Version: 留空则自动从 pom.xml 读取
+- WebDAV Username: WebDAV文件空间用户名（如与登录用户名不同）
 - Template Base Path: 默认 `/云平台开发部/监控模板`
 
 Zabbix配置（可选，用于自动导入测试环境）：
@@ -290,149 +296,113 @@ Zabbix配置（可选，用于自动导入测试环境）：
 - Zabbix Username: Zabbix用户名
 - Zabbix Password: Zabbix密码
 
+#### 配置参数详解
+
+| 配置项 | 类型 | 必填 | 默认值 | 说明 |
+|--------|------|------|--------|------|
+| **NextCloud配置** |
+| `nextcloud.url` | String | 是 | - | NextCloud服务器地址 |
+| `nextcloud.username` | String | 是 | - | NextCloud用户名 |
+| `nextcloud.password` | String | 是 | - | NextCloud应用专用密码 |
+| `nextcloud.templateBasePath` | String | 否 | `/云平台开发部/监控模板` | 模板存储根路径 |
+| `nextcloud.webdavUsername` | String | 否 | - | WebDAV文件空间用户名（如果与登录用户名不同）|
+| **Zabbix配置** |
+| `zabbix.url` | String | 否 | - | Zabbix服务器地址 |
+| `zabbix.username` | String | 否 | - | Zabbix用户名 |
+| `zabbix.password` | String | 否 | - | Zabbix密码 |
+
+**注意事项**：
+- SSL证书验证已自动禁用，支持自签名证书
+- 超时时间固定为30秒
+- Zabbix配置是可选的，如不配置则只上传到NextCloud，不导入到Zabbix
+- 配置修改后需要重启Cursor才能生效
+- 建议使用应用专用密码而非登录密码，提高安全性
+
 #### 步骤2：创建业务监控项配置文件
 
-> 💡 **重要说明**：主监控项模板由运维管理人员统一维护到NextCloud、Zabbix，各组件项目中**无需创建**主监控项配置文件。
+在 `src/main/resources/zabbix/` 创建业务监控项配置文件：`{serviceName}_business_template.properties`
 
-在 `src/main/resources/zabbix/` 创建业务监控项配置文件：
+> 📝 **文件命名规则**：
+> - 文件名格式：`{serviceName}_business_template.properties`
+> - `{serviceName}` 自动从项目的 `pom.xml` 文件中读取 `<artifactId>` 标签值
+> - 如果项目没有 `pom.xml` 文件，需要手动指定服务名称
 
-**文件：`{serviceName}_business_template.properties`**
 
-> 📋 **主监控项模板参考**：以下主监控项配置由运维人员维护，各组件无需创建，仅作为参考了解依赖关系。
 
 **主监控项模板配置（运维维护）**：
 
-```properties
-# 主监控项模板 - 所有组件使用相同的配置
-# 文件名：master_prometheus_business_template.properties（由运维人员维护）
-
-# 模板基本信息
-zabbix.template="master_prometheus_business_template"
-zabbix.template.name="master_prometheus_business_template"
-zabbix.template.version="5.0"
-
-# 模板组信息
-zabbix.groups[0].name="business_monitor"
-
-# 应用信息
-zabbix.applications[0].name="Prometheus"
-
-# 宏定义
-zabbix.macros[0].macro="{$EXPORTTOOL_URL}"
-zabbix.macros[0].value="127.0.0.1:21746"
-zabbix.macros[0].description="ExporterTool接口URL"
-
-# 主监控项（唯一的Prometheus数据拉取入口）
-zabbix.items[0].name="master-prometheus-metadata"
-zabbix.items[0].key="master.prometheus[{$EXPORTTOOL_URL}]"
-zabbix.items[0].type="ZABBIX_ACTIVE"
-zabbix.items[0].value_type="TEXT"
-zabbix.items[0].delay="5m"
-zabbix.items[0].history="30d"
-zabbix.items[0].trends="0"
-zabbix.items[0].appName="Prometheus"
-```
+> 📖 完整配置说明请参考：[示例文件](doc/examples/master_prometheus_business_template.properties)
+> 
+> 💡 **重要说明**：主监控项模板由运维人员统一维护，各组件无需创建，仅作为参考了解依赖关系。
 
 **业务监控项配置（各组件维护）**：
 
-> 📖 完整配置说明请参考：[配置参数参考手册](doc/configuration-reference.md) | [示例文件](doc/examples/base_alarm_service_business_template.properties)
-
-```properties
-# 业务监控项模板配置（示例）
-# 文件名：{serviceName}_business_template.properties（serviceName自动从pom.xml读取）
-
-# 模板基本信息
-zabbix.template="base_alarm_service_business_template"
-zabbix.template.name="base_alarm_service_business_template"
-zabbix.template.version="5.0"
-
-# 模板组信息
-zabbix.groups[0].name="business_monitor"
-
-# 应用信息
-zabbix.applications[0].name="base_alarm_service"
-
-# 模板依赖（关键：声明依赖主监控项模板）
-zabbix.templates[0].name="master_prometheus_business_template"
-
-# 业务监控项配置
-# 更新管理员信息调度任务 - 监控更新管理员信息的定时任务执行情况
-# name 和 key 对应 Kafka 消息中的 n (domain) 字段：业务领域标识
-zabbix.items[0].name="ft_manager_app_update_admin_info_scheduler_task"
-zabbix.items[0].key="ft_manager_app_update_admin_info_scheduler_task"
-zabbix.items[0].type="DEPENDENT"
-zabbix.items[0].value_type="FLOAT"
-zabbix.items[0].delay="0"
-# 关键：引用主监控项（来自master_prometheus_business_template.properties）
-zabbix.items[0].master_item="master.prometheus[{$EXPORTTOOL_URL}]"
-zabbix.items[0].preprocessing_type="PROMETHEUS_PATTERN"
-zabbix.items[0].preprocessing_params="ft_manager_app_update_admin_info_scheduler_task{}"
-zabbix.items[0].appName="base_alarm_service"
-
-# 发现规则配置
-# DCS业务信息发现规则 - 自动发现DCS(Distributed Control System)业务信息指标
-# 用于监控不同应用、租户、类别的业务数据，支持动态发现和监控
-zabbix.discovery_rules[0].name="s17_dcs_dcsBusinessInfo"
-zabbix.discovery_rules[0].key="s17_dcs_dcsBusinessInfo.discovery"
-zabbix.discovery_rules[0].type="DEPENDENT"
-zabbix.discovery_rules[0].delay="0"
-zabbix.discovery_rules[0].lifetime="3d"
-# 同样引用主监控项
-zabbix.discovery_rules[0].master_item="master.prometheus[{$EXPORTTOOL_URL}]"
-zabbix.discovery_rules[0].preprocessing_type="PROMETHEUS_TO_JSON"
-zabbix.discovery_rules[0].preprocessing_params="s17_dcs_dcsBusinessInfo{}"
-# lld_macros 对应 Kafka 消息中的 l (label) 字段：指标标签，用于多维度监控
-zabbix.discovery_rules[0].lld_macros="APPID,CATEGORY,METRIC_NAME,SOURCE,TENANTID"
-zabbix.discovery_rules[0].appName="base_alarm_service"
-# item_prototype配置
-zabbix.discovery_rules[0].item_prototype.name="s17_dcs_dcsBusinessInfo:[{#CATEGORY}] [appId:{#APPID}] [tenantId:{#TENANTID}]"
-zabbix.discovery_rules[0].item_prototype.key="s17_dcs_dcsBusinessInfo[{#CATEGORY},{#APPID},{#TENANTID}]"
-```
+> 📖 完整配置说明请参考：[示例文件说明](doc/examples/README.md)
+> - [告警服务示例](doc/examples/base_alarm_service_business_template.properties)
+> - [网关服务示例](doc/examples/base_gateway_service_business_template.properties)  
+> - [服务器服务示例](doc/examples/base_server_service_business_template.properties)
 
 > 💡 **配置说明**：
-> - **主监控项**：由运维人员统一维护，各组件无需创建，已存在于Zabbix中
+> - **主监控项**：由运维人员统一维护，各组件无需创建
 > - **业务监控项**：各组件需要创建和维护，文件名 `{serviceName}` 从 pom.xml 自动读取
 > - **依赖关系**：所有业务监控项通过 `master_item` 引用主监控项：`master.prometheus[{$EXPORTTOOL_URL}]`
 > - **静态监控项**：适合固定指标（如系统总量、健康状态）
 > - **发现规则**：适合多维度场景（如多租户、多应用），配置一次自动适配
-> - **模板依赖**：业务模板通过 `zabbix.templates[0].name="master_prometheus_business_template"` 声明依赖
 
 #### 步骤3：发布模板
 
-**发布方式**：
-- 命令面板：`Cmd/Ctrl + Shift + P` → "Publish Zabbix Template"
-- 右键菜单：右键配置文件 → 选择发布
-- 快捷键：`Cmd/Ctrl + Shift + Z`
+**🎯 新特性：合并模板方案**
+
+为解决Zabbix模板依赖冲突问题（多个模板依赖同一个主模板导致无法同时链接），插件提供了**Dev/Release双环境工作流**：
+
+**🔧 开发测试环境**：
+- 右键 `.properties` 文件 → `🔧 开发测试 - 生成合并模板`
+- 功能：
+  1. 生成本地模板XML
+  2. 从NextCloud拉取其他组件的Release版本模板
+  3. 自动合并所有模板为单一模板
+  4. 导入到测试Zabbix环境进行验证
+- 特点：**不上传到NextCloud，不影响生产环境**
+- 测试环境模板名称：`merged_business_template`（合并后的统一模板）
+
+**🚀 生产发布环境**：
+- 右键 `.properties` 文件 → `🚀 生产发布 - 发布合并模板`
+- 功能：
+  1. 生成本地模板XML并上传到 `zabbix_template_release/`
+  2. 从NextCloud拉取所有Release模板
+  3. 自动合并所有模板
+  4. 上传合并模板到 `zabbix_template_release/merged/`
+- 特点：**正式发布，更新生产环境合并模板**
+
+**工作流程**：
+```
+开发 → 修改.properties → 🔧 Dev测试 → 验证通过 → 🚀 Release发布 → 生产环境更新
+```
+
+**操作说明**：
+- **🔧 开发测试**：右键 `.properties` 文件 → 选择"🔧 开发测试 - 生成合并模板"
+- **🚀 生产发布**：右键 `.properties` 文件 → 选择"🚀 生产发布 - 发布合并模板"
 
 **支持的文件格式**：
 - **`.properties` 文件**：自动转换为XML格式后上传
 - **`.xml` 文件**：直接上传，无需转换
 
-**自动执行流程**：
-
-**Properties文件流程**：
-1. 读取业务监控项配置文件（`.properties`）
-2. 转换为 `.xml` 模板文件
-3. 上传到 NextCloud
-4. 自动创建缺失的主机组（如需要）🆕
-5. 导入到 Zabbix 测试环境（如已配置）
-
-**XML文件流程**：
-1. 直接读取XML模板文件
-2. 提取模板名称用于Zabbix导入
-3. 直接上传到 NextCloud
-4. 自动创建缺失的主机组（如需要）🆕
-5. 导入到 Zabbix 测试环境（如已配置）
+> ⚠️ **重要说明**：V2.0版本已移除传统的单独发布功能，统一使用合并模板方案。所有模板发布都通过合并模板功能进行，确保零依赖冲突。
 
 > 💡 **工作分工**：
 > - **运维人员**：负责维护主监控项模板到NextCloud
 > - **开发人员**：只需维护业务监控项 `.properties` 文件，插件自动处理转换、上传、导入
+>
+> 💡 **使用建议**：
+> - **新功能开发**：先用🔧开发测试验证，通过后用🚀生产发布
+> - **模板维护**：统一使用合并模板方案，避免依赖冲突
+> - **版本管理**：通过NextCloud实现模板版本控制和发布管理
 
-#### 步骤4：联系运维链接模板
+#### 步骤4：链接合并模板
 
 **开发环境（测试）**：
 
-插件会自动导入模板到Zabbix测试环境，开发人员需要手动绑定主机进行验证：
+插件会自动导入合并模板到Zabbix测试环境，开发人员需要手动绑定主机进行验证：
 
 1. **登录Zabbix测试环境**
    - 访问Zabbix测试环境URL
@@ -442,12 +412,10 @@ zabbix.discovery_rules[0].item_prototype.key="s17_dcs_dcsBusinessInfo[{#CATEGORY
    - 进入 `配置` → `主机`
    - 搜索并选择需要绑定的主机（通常是服务部署的主机）
 
-3. **链接监控模板**
+3. **链接合并模板**
    - 点击主机名称进入编辑页面
    - 切换到 `模板` 标签页
-   - 在"链接新模板"输入框中搜索并选择以下模板：
-     - `master_prometheus_business_template`（主监控项，首次必须链接）
-     - `{serviceName}_business_template`（业务监控项）
+   - 在"链接新模板"输入框中搜索并选择：`merged_business_template`
    - 点击 `添加` → `更新` 保存配置
 
 4. **验证数据采集**
@@ -458,33 +426,58 @@ zabbix.discovery_rules[0].item_prototype.key="s17_dcs_dcsBusinessInfo[{#CATEGORY
 
 **生产环境（正式部署）**：
 
-1. 联系运维人员，提供模板名称：`{serviceName}_business_template`
-2. 运维人员从NextCloud下载模板并导入生产环境
-3. 运维人员在主机上链接以下模板：
-   - `master_prometheus_business_template`（主监控项，首次必须链接）
-   - `{serviceName}_business_template`（业务监控项）
+1. 运维人员从NextCloud的 `zabbix_template_release/merged/` 目录下载合并模板
+2. 导入 `merged_business_template.xml` 到生产环境Zabbix
+3. 在主机上链接合并模板：`merged_business_template`
 4. 验证数据：`监测` → `最新数据`（等待5-10分钟）
 
 > 💡 **提示**：
-> - 主监控项模板由运维统一管理，只需链接一次
-> - 每个组件的业务模板独立链接
-> - 模板名称与配置文件中的 `zabbix.template.name` 对应
-> - 开发环境可以自行绑定主机测试，生产环境需联系运维操作
+> - 开发环境：使用自动导入的 `merged_business_template`
+> - 生产环境：运维从NextCloud下载合并模板进行部署
+> - 合并模板包含所有监控项，无需单独链接主监控项和业务监控项
+> - 一个合并模板解决所有依赖冲突问题
 
-## 文档资源
+## 🔧 常见问题与故障排查
 
-- [Cursor插件使用指南](doc/cursor-plugin-guide.md) - 插件安装、配置、使用详解
-- [配置参数参考](doc/configuration-reference.md) - 完整配置参数说明
-- [常见问题FAQ](doc/faq.md) - 高频问题解答、最佳实践
-- [故障排查指南](doc/troubleshooting.md) - 错误诊断、解决方案
+### 配置问题
+- **NextCloud连接失败**：检查URL、用户名、密码是否正确，确认网络连通性
+- **Zabbix导入失败**：检查Zabbix配置和权限，确认模板格式正确
+- **模板合并失败**：检查所有依赖模板是否存在于NextCloud中
+
+### 开发问题
+- **服务名称读取失败**：确认项目根目录存在 `pom.xml` 文件且格式正确
+- **监控项无数据**：检查ExporterTool服务是否正常运行，确认数据格式符合规范
+- **发现规则不生效**：检查LLD宏定义和预处理规则配置
+
+### 生产问题
+- **合并模板冲突**：使用Dev环境测试后再进行Release发布
+- **主机链接失败**：确认合并模板已正确导入到Zabbix生产环境
+
+> 📖 **详细故障排查指南**：[故障排查与常见问题](doc/troubleshooting.md)
+
+## 📚 文档资源
+
+- [合并模板使用指南](doc/merged-template-guide.md) - 合并模板功能完整说明
+- [故障排查与常见问题](doc/troubleshooting.md) - 错误诊断、解决方案、FAQ
+- [示例文件](doc/examples/) - 完整的配置示例和模板文件
 
 ---
 
-**文档版本**: V3.0  
-**最后更新**: 2025-10-18  
+## 📋 版本信息
 
-**V3.0 核心特性**：
-- 📁 主从分离架构：运维管理主监控项，开发维护业务监控项
-- 🤖 插件智能处理：自动识别依赖关系，支持两种模式
-- 📦 零协调成本：各业务团队完全独立维护业务监控项
-- ✅ 零学习成本：开发人员无需关注主监控项细节
+**文档版本**: V2.0  
+**最后更新**: 2025-01-22  
+
+### V2.0 核心特性
+- 🔄 **合并模板架构**：解决Zabbix模板依赖冲突问题
+- 🔧 **Dev/Release工作流**：开发测试与生产发布完全隔离
+- 🤖 **自动模板合并**：智能合并多个模板为单一模板
+- 📦 **NextCloud集成**：自动拉取和上传模板文件
+- ⚡ **零依赖冲突**：合并模板无依赖关系，可正常链接到主机
+- ✅ **零学习成本**：开发人员无需关注主监控项细节
+
+### V1.0 核心特性（历史版本）
+- 📁 **主从分离架构**：运维管理主监控项，开发维护业务监控项
+- 🤖 **插件智能处理**：自动识别依赖关系，支持两种模式
+- 📦 **零协调成本**：各业务团队完全独立维护业务监控项
+- ✅ **零学习成本**：开发人员无需关注主监控项细节

@@ -1,12 +1,13 @@
-# 构建指南
+# 开发者指南
 
-本文档说明如何构建、测试和打包Zabbix Template Publisher插件。
+本文档说明如何构建、测试、打包和发布Zabbix Template Publisher插件。
 
 ## 📋 前置要求
 
 - Node.js >= 18.0.0
 - npm >= 9.0.0
 - Visual Studio Code 或 Cursor
+- Git
 
 ## 🔧 开发环境设置
 
@@ -200,20 +201,146 @@ npm update
 npm outdated  # 查看过期的包
 ```
 
+## 📦 打包发布到OpenVSX
+
+### 准备工作
+
+1. **生成图标**（如果还没有）
+
+```bash
+# 方法A: 自动生成（推荐）
+npm install sharp --save-dev
+npm run generate-icon
+
+# 方法B: 在线转换
+# 访问 https://cloudconvert.com/svg-to-png
+# 上传 icon.svg，设置尺寸为 128x128
+# 下载为 icon.png
+```
+
+2. **更新版本号**
+
+在 `package.json` 中更新版本号：
+```json
+{
+  "version": "2.0.0"
+}
+```
+
+3. **更新CHANGELOG**
+
+在 `CHANGELOG.md` 中记录本次更新的内容。
+
+4. **检查清单**
+
+- ✅ `icon.png` 存在且尺寸正确（128x128）
+- ✅ `package.json` 中有 `"icon": "icon.png"`
+- ✅ 所有TypeScript代码编译成功
+- ✅ 没有linter错误
+- ✅ README.md 内容完整
+- ✅ CHANGELOG.md 已更新
+
+### 打包VSIX
+
+```bash
+# 安装打包工具
+npm install -g @vscode/vsce
+
+# 打包
+vsce package
+```
+
+这会生成 `zabbix-template-publisher-{version}.vsix` 文件。
+
+### 发布到OpenVSX
+
+1. **创建OpenVSX账号**
+
+访问 https://open-vsx.org/ 注册账号
+
+2. **获取Access Token**
+
+- 登录OpenVSX
+- 进入用户设置 → Access Tokens
+- 创建新的Personal Access Token
+- 保存token（只显示一次）
+
+3. **使用ovsx CLI发布**
+
+```bash
+# 安装ovsx CLI
+npm install -g ovsx
+
+# 发布（首次需要登录）
+ovsx publish -p <your-access-token>
+
+# 或者使用环境变量
+export OVSX_PAT=<your-access-token>
+ovsx publish
+```
+
+4. **发布成功**
+
+发布成功后，扩展将在几分钟内出现在OpenVSX市场：
+https://open-vsx.org/extension/shon-chen/zabbix-template-publisher
+
+### 发布检查清单
+
+- [ ] 版本号已更新
+- [ ] CHANGELOG已更新
+- [ ] 代码已编译且无错误
+- [ ] VSIX文件已生成
+- [ ] 已测试VSIX安装和功能
+- [ ] 已发布到OpenVSX
+- [ ] 已在OpenVSX市场验证
+
 ## 📚 相关资源
 
+### VSCode/Cursor扩展开发
 - [VS Code Extension API](https://code.visualstudio.com/api)
 - [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
 - [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
+
+### OpenVSX
+- [OpenVSX Registry](https://open-vsx.org/)
+- [OpenVSX CLI](https://github.com/eclipse/openvsx/wiki/Publishing-Extensions)
+
+### 技术栈
 - [TypeScript Documentation](https://www.typescriptlang.org/docs/)
+- [Axios HTTP Client](https://axios-http.com/docs/intro)
+- [xml2js Parser](https://github.com/Leonidas-from-XIV/node-xml2js)
 
 ## 🤝 贡献指南
+
+### 提交规范
+
+使用 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/v1.0.0/) 规范：
+
+```
+feat: 添加新功能
+fix: 修复Bug
+docs: 文档更新
+style: 代码格式调整
+refactor: 重构代码
+test: 添加测试
+chore: 构建或辅助工具变动
+```
+
+### 贡献流程
 
 1. Fork本仓库
 2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
 3. 提交更改 (`git commit -m 'feat: Add some AmazingFeature'`)
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 开启Pull Request
+
+### 代码审查
+
+所有PR需要经过代码审查才能合并。审查要点：
+- 代码质量和规范
+- 功能完整性
+- 测试覆盖
+- 文档完整性
 
 ---
 

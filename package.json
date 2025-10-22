@@ -1,8 +1,8 @@
 {
   "name": "zabbix-template-publisher",
   "displayName": "Zabbix Template Publisher",
-  "description": "Publish Zabbix monitoring templates from properties to NextCloud and Zabbix",
-  "version": "1.0.2",
+  "description": "Publish Zabbix monitoring templates from properties to NextCloud and Zabbix with merged template support",
+  "version": "2.0.0",
   "publisher": "shon-chen",
   "icon": "icon.png",
   "repository": {
@@ -26,40 +26,47 @@
   "contributes": {
     "commands": [
       {
-        "command": "zabbix-template-publisher.publish",
-        "title": "Publish Zabbix Template",
+        "command": "zabbix-template-publisher.testConnection",
+        "title": "Test NextCloud Connection",
         "category": "Zabbix"
       },
       {
-        "command": "zabbix-template-publisher.testConnection",
-        "title": "Test NextCloud Connection",
+        "command": "zabbix-template-publisher.devMerge",
+        "title": "🔧 开发测试 - 生成合并模板",
+        "category": "Zabbix"
+      },
+      {
+        "command": "zabbix-template-publisher.releaseMerge",
+        "title": "🚀 生产发布 - 发布合并模板",
         "category": "Zabbix"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "zabbix-template-publisher.publish",
-          "when": "resourceExtname == .properties || resourceExtname == .xml",
-          "group": "zabbix"
+          "command": "zabbix-template-publisher.devMerge",
+          "when": "resourceExtname == .properties",
+          "group": "zabbix@1"
+        },
+        {
+          "command": "zabbix-template-publisher.releaseMerge",
+          "when": "resourceExtname == .properties",
+          "group": "zabbix@2"
         }
       ],
       "editor/context": [
         {
-          "command": "zabbix-template-publisher.publish",
-          "when": "resourceExtname == .properties || resourceExtname == .xml",
-          "group": "zabbix"
+          "command": "zabbix-template-publisher.devMerge",
+          "when": "resourceExtname == .properties",
+          "group": "zabbix@1"
+        },
+        {
+          "command": "zabbix-template-publisher.releaseMerge",
+          "when": "resourceExtname == .properties",
+          "group": "zabbix@2"
         }
       ]
     },
-    "keybindings": [
-      {
-        "command": "zabbix-template-publisher.publish",
-        "key": "ctrl+shift+z",
-        "mac": "cmd+shift+z",
-        "when": "editorTextFocus && (resourceExtname == .properties || resourceExtname == .xml)"
-      }
-    ],
     "configuration": {
       "title": "Zabbix Template Publisher",
       "properties": {
@@ -88,25 +95,36 @@
           "default": "/云平台开发部/监控模板",
           "description": "NextCloud存储基础路径"
         },
-        "zabbix-template-publisher.version": {
+        "zabbix-template-publisher.nextcloud.releasePath": {
           "type": "string",
-          "default": "",
-          "description": "版本号 (留空则自动从pom.xml读取)"
+          "default": "zabbix_template_release",
+          "description": "Release环境模板目录 (相对于basePath)"
+        },
+        "zabbix-template-publisher.nextcloud.mergedPath": {
+          "type": "string",
+          "default": "zabbix_template_release/merged",
+          "description": "合并模板目录 (相对于basePath)"
         },
         "zabbix-template-publisher.zabbix.url": {
           "type": "string",
           "default": "",
-          "description": "Zabbix服务器URL (可选，用于自动导入测试环境)"
+          "description": "Zabbix测试环境URL (用于Dev环境测试，可选)"
         },
         "zabbix-template-publisher.zabbix.username": {
           "type": "string",
           "default": "",
-          "description": "Zabbix用户名 (可选)"
+          "description": "Zabbix测试环境用户名 (用于Dev环境测试，可选)"
         },
         "zabbix-template-publisher.zabbix.password": {
           "type": "string",
           "default": "",
-          "description": "Zabbix密码 (可选)"
+          "description": "Zabbix测试环境密码 (用于Dev环境测试，可选)"
+        },
+        "zabbix-template-publisher.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "日志输出级别: debug(详细调试信息), info(一般信息), warn(警告), error(仅错误)"
         }
       }
     }

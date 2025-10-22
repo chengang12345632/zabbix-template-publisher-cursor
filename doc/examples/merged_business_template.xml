@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2025-10-22T10:35:00Z</date>
+    <groups>
+        <group>
+            <name>business_monitor</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>merged_business_template</template>
+            <name>merged_business_template</name>
+            <description>合并模板：整合主监控项和所有业务监控项到一个模板中。所有DEPENDENT监控项的master_item引用都在模板内部，避免了模板依赖冲突。</description>
+            <groups>
+                <group>
+                    <name>business_monitor</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>Prometheus</name>
+                </application>
+                <application>
+                    <name>base_alarm_service</name>
+                </application>
+                <application>
+                    <name>base_server_service</name>
+                </application>
+                <application>
+                    <name>base_gateway_service</name>
+                </application>
+            </applications>
+            <macros>
+                <macro>
+                    <macro>{$EXPORTTOOL_URL}</macro>
+                    <value>127.0.0.1:21746</value>
+                    <description>ExporterTool接口URL</description>
+                </macro>
+                <macro>
+                    <macro>{$MERGED_COMPONENTS}</macro>
+                    <value>master,alarm,server,gateway</value>
+                    <description>合并的组件列表</description>
+                </macro>
+                <macro>
+                    <macro>{$MERGED_VERSION}</macro>
+                    <value>v1.0.0</value>
+                    <description>合并模板版本</description>
+                </macro>
+            </macros>
+            <items>
+                <!-- ========== 主监控项（来自master模板）========== -->
+                <item>
+                    <name>master-prometheus-metadata</name>
+                    <type>ZABBIX_ACTIVE</type>
+                    <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    <delay>5m</delay>
+                    <value_type>TEXT</value_type>
+                    <history>30d</history>
+                    <trends>0</trends>
+                    <applications>
+                        <application>
+                            <name>Prometheus</name>
+                        </application>
+                    </applications>
+                </item>
+                
+                <!-- ========== base_alarm_service 监控项 ========== -->
+                <item>
+                    <name>insertAlarmFailed</name>
+                    <type>DEPENDENT</type>
+                    <key>insertAlarmFailed</key>
+                    <delay>0</delay>
+                    <value_type>FLOAT</value_type>
+                    <applications>
+                        <application>
+                            <name>base_alarm_service</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_PATTERN</type>
+                            <params>base_alarm_insertAlarmFailed{}
+</params>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                </item>
+                
+                <item>
+                    <name>repeatAlarmMsg</name>
+                    <type>DEPENDENT</type>
+                    <key>repeatAlarmMsg</key>
+                    <delay>0</delay>
+                    <value_type>FLOAT</value_type>
+                    <applications>
+                        <application>
+                            <name>base_alarm_service</name>
+                        </application>
+                    </applications>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_PATTERN</type>
+                            <params>base_alarm_repeatAlarmMsg{}
+</params>
+                        </step>
+                    </preprocessing>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                </item>
+                
+            </items>
+            
+            <!-- ========== 发现规则 ========== -->
+            <!-- base_server_service 发现规则 -->
+            <!-- base_gateway_service 发现规则 -->
+            <discovery_rules>
+                <discovery_rule>
+                    <name>saas_server_deviceCount</name>
+                    <type>DEPENDENT</type>
+                    <key>saas_server_deviceCount.discovery</key>
+                    <delay>0</delay>
+                    <lifetime>3d</lifetime>
+                    <description>发现所有设备数量统计指标，按租户、应用、类型等维度动态创建监控项</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>Device Count: [{#COUNTTYPE}] [appId:{#APPID}] [tenantId:{#TENANTID}]</name>
+                            <type>DEPENDENT</type>
+                            <key>saas_server_deviceCount[{#COUNTTYPE},{#APPID},{#TENANTID}]</key>
+                            <delay>0</delay>
+                            <value_type>FLOAT</value_type>
+                            <description>设备数量统计
+- Count Type: {#COUNTTYPE} (online=在线数, total=总数)
+- AppId: {#APPID}
+- TenantId: {#TENANTID}</description>
+                            <applications>
+                                <application>
+                                    <name>base_server_service</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>PROMETHEUS_PATTERN</type>
+                                    <params>saas_server_deviceCount{countType="{#COUNTTYPE}",appId="{#APPID}",tenantId="{#TENANTID}"}
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#APPID}</lld_macro>
+                            <path>$.labels['appId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#COUNTTYPE}</lld_macro>
+                            <path>$.labels['countType']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SOURCE}</lld_macro>
+                            <path>$.labels['source']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#TENANTID}</lld_macro>
+                            <path>$.labels['tenantId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METRIC_NAME}</lld_macro>
+                            <path>$['name']</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_TO_JSON</type>
+                            <params>saas_server_deviceCount{}</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+                <discovery_rule>
+                    <name>saas_gateway_api_counter_times</name>
+                    <type>DEPENDENT</type>
+                    <key>saas_gateway_api_counter_times.discovery</key>
+                    <delay>0</delay>
+                    <lifetime>3d</lifetime>
+                    <description>发现所有 Gateway API 调用统计指标，按 URL、方法、状态等维度动态创建监控项</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>API Counter: [{#URL}] [{#METHOD}] [{#STATE}]</name>
+                            <type>DEPENDENT</type>
+                            <key>saas_gateway_api_counter_times[{#URL},{#METHOD},{#STATE},{#SOURCE},{#APPID},{#TENANTID}]</key>
+                            <delay>0</delay>
+                            <value_type>FLOAT</value_type>
+                            <description>API 调用次数统计
+- URL: {#URL}
+- Method: {#METHOD}
+- State: {#STATE}
+- Source: {#SOURCE}
+- AppId: {#APPID}
+- TenantId: {#TENANTID}</description>
+                            <applications>
+                                <application>
+                                    <name>base_gateway_service</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>PROMETHEUS_PATTERN</type>
+                                    <params>saas_gateway_api_counter_times{url="{#URL}",method="{#METHOD}",state="{#STATE}",source="{#SOURCE}",appId="{#APPID}",tenantId="{#TENANTID}"}
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#APPID}</lld_macro>
+                            <path>$.labels['appId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METHOD}</lld_macro>
+                            <path>$.labels['method']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SOURCE}</lld_macro>
+                            <path>$.labels['source']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#STATE}</lld_macro>
+                            <path>$.labels['state']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#TENANTID}</lld_macro>
+                            <path>$.labels['tenantId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#URL}</lld_macro>
+                            <path>$.labels['url']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METRIC_NAME}</lld_macro>
+                            <path>$['name']</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_TO_JSON</type>
+                            <params>saas_gateway_api_counter_times{}</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+        </template>
+    </templates>
+</zabbix_export>

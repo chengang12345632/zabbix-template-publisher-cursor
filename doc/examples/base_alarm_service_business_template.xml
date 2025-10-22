@@ -23,7 +23,7 @@
             </applications>
             <templates>
                 <template>
-                    <name>s17_prometheus_template</name>
+                    <name>master_prometheus_business_template</name>
                 </template>
             </templates>
             <items>

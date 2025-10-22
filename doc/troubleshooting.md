@@ -1,47 +1,124 @@
-# 故障排查指南
+# 故障排查与常见问题
 
-## 诊断工具
+## 🔧 诊断工具
 
 ### 检查配置
-
 1. 在Cursor中打开命令面板：`Cmd/Ctrl + Shift + P`
-2. 输入 "Zabbix Template Publisher: Show Configuration"
-3. 查看当前配置是否完整
+2. 输入 "Zabbix Template Publisher: Test NextCloud Connection"
+3. 查看连接测试结果和配置信息
 
 ### 查看详细日志
-
 1. 打开输出面板：`Cmd/Ctrl + Shift + U`
 2. 选择 "Zabbix Template Publisher" 通道
 3. 查看详细执行日志
 
-## 常见错误及解决方案
+---
 
-### 1. pom.xml读取失败
+## ❓ 常见问题 (FAQ)
 
-**错误信息**：
+### NextCloud相关
+
+#### Q1: 如何获取NextCloud应用专用密码？
+
+A: 按照以下步骤：
 ```
-Cannot read serviceName and version from pom.xml
-```
-
-**原因**：
-- 项目根目录不存在pom.xml文件
-- pom.xml格式错误
-- pom.xml缺少artifactId或version标签
-
-**解决方案**：
-检查pom.xml文件，确保包含artifactId和version：
-```xml
-<project>
-    <artifactId>your-service-name</artifactId>
-    <version>1.0.0</version>
-</project>
+1. 登录 NextCloud 网页版
+2. 头像 → 设置（Settings）
+3. 安全（Security）
+4. 应用密码（App passwords）
+5. 输入名称（如：Zabbix Template Publisher）
+6. 创建 → 复制密码（格式：xxxxx-xxxxx-xxxxx-xxxxx-xxxxx）
 ```
 
-插件会自动读取artifactId作为serviceName。如需自定义version，可在插件设置中配置 `Version`。
+#### Q2: 为什么必须使用应用专用密码？
+
+A: NextCloud WebDAV API 出于安全考虑，要求使用应用专用密码而不是主账户密码。这样即使应用密码泄露，也可以单独撤销而不影响主账户。
+
+#### Q3: 如何查看上传到NextCloud的文件？
+
+A: 
+1. 登录 NextCloud 网页版
+2. 进入文件目录
+3. 导航到配置的根目录（默认：`/云平台开发部/监控模板/zabbix_template_release/`）
+4. 查看上传的模板文件
+
+#### Q4: zabbix_template_release目录和merged目录有什么区别？
+
+A: 
+- **zabbix_template_release目录**：存储各组件的最新Release版本模板
+- **merged目录**：存储合并后的最终模板，供生产环境使用
 
 ---
 
-### 2. NextCloud认证失败
+### 配置相关
+
+#### Q5: 如何自定义模板存储路径？
+
+A: 在插件设置中配置 `Template Base Path`：
+```
+Ctrl + , → 搜索 "Zabbix Template Publisher"
+→ Template Base Path: /自定义路径/监控模板
+```
+
+#### Q6: 如何配置测试Zabbix环境？
+
+A: 在插件设置中配置测试Zabbix连接信息：
+```
+Zabbix URL: http://test-zabbix.company.com
+Zabbix Username: your-username
+Zabbix Password: your-password
+```
+
+#### Q7: WebDAV用户名和认证用户名有什么区别？
+
+A: 
+- **认证用户名**：用于NextCloud登录认证
+- **WebDAV用户名**：用于文件路径构建，通常与认证用户名相同
+- 如果两者不同，需要分别配置
+
+---
+
+### 合并模板相关
+
+#### Q8: Dev和Release环境有什么区别？
+
+A: 
+- **🔧 开发测试**：本地测试，不上传，不影响生产环境
+- **🚀 生产发布**：正式发布，上传到NextCloud，更新生产环境
+
+#### Q9: 合并模板时出现依赖冲突怎么办？
+
+A: 合并模板功能正是为了解决依赖冲突而设计的。如果仍有问题，请检查：
+1. 确保所有模板都正确上传到NextCloud
+2. 检查模板名称是否冲突
+3. 查看详细日志了解具体错误
+
+#### Q10: 如何验证合并模板是否正常工作？
+
+A: 
+1. 使用🔧开发测试功能
+2. 检查Zabbix测试环境中的监控项
+3. 确认数据正常采集
+4. 验证LLD宏是否正确替换
+
+#### Q11: 为什么Dev测试时提示"没有找到Release模板"？
+
+A: 这是正常现象，表示：
+1. 首次使用合并模板功能
+2. NextCloud上还没有Release模板
+3. 可以先使用传统方式发布模板，或直接测试本地模板
+
+#### Q12: 合并模板的命名规则是什么？
+
+A: 
+- **Dev环境**：`merged_business_template_dev`
+- **Release环境**：`merged_business_template`
+
+---
+
+## 🚨 常见错误及解决方案
+
+### 1. NextCloud认证失败
 
 **错误信息**：
 ```
@@ -49,40 +126,33 @@ Cannot read serviceName and version from pom.xml
 ```
 
 **原因**：
-用户名或密码错误
+- 用户名或密码错误
+- 使用了主账户密码而非应用专用密码
+- NextCloud服务器配置问题
 
 **解决方案**：
-- 确认用户名和密码正确
-- **必须使用应用专用密码，不能使用登录密码**
-- 在NextCloud Web界面重新生成应用专用密码
-
-**获取应用专用密码**：
-```
-登录 NextCloud 网页版
-→ 头像 → 设置（Settings）
-→ 安全（Security）
-→ 应用密码（App passwords）
-→ 输入名称（如：Zabbix Template Publisher）
-→ 创建 → 复制密码（格式：xxxxx-xxxxx-xxxxx-xxxxx-xxxxx）
-```
+1. 确认使用应用专用密码
+2. 检查用户名是否正确
+3. 确认NextCloud服务器可访问
 
 ---
 
-### 3. NextCloud权限不足
+### 3. 文件上传失败
 
 **错误信息**：
 ```
-403 Forbidden
+Upload failed: 404 Not Found
 ```
 
 **原因**：
-用户没有上传权限
+- 目标目录不存在
+- 权限不足
+- 路径配置错误
 
 **解决方案**：
-- 在NextCloud中检查用户权限
-- 确认目标目录可写
-- 尝试在Web界面手动上传测试
-- 联系NextCloud管理员分配写入权限
+1. 检查NextCloud目录是否存在
+2. 确认用户有写入权限
+3. 验证路径配置是否正确
 
 ---
 
@@ -90,180 +160,304 @@ Cannot read serviceName and version from pom.xml
 
 **错误信息**：
 ```
-Failed to import template to Zabbix
+Template import failed
 ```
 
 **原因**：
-- Zabbix服务器连接失败
-- Zabbix认证失败
-- 模板格式错误
-- 网络不可达
+- XML格式错误
+- 模板名称冲突
+- Zabbix版本不兼容
 
 **解决方案**：
-- 检查Zabbix服务器地址是否正确
-- 确认Zabbix用户名和密码
-- 验证生成的XML模板格式
-- 尝试在Zabbix Web界面手动导入测试
-- 检查防火墙和网络连接
+1. 检查生成的XML格式
+2. 确认模板名称唯一
+3. 验证Zabbix版本兼容性
 
 ---
 
-### 5. 模板配置文件未找到
+### 5. 合并模板缺少监控项
 
 **错误信息**：
 ```
-Template configuration file not found
+合并后的模板只有主监控项，缺少业务监控项
 ```
 
 **原因**：
-`src/main/resources/zabbix/` 目录下找不到配置文件
+- Properties解析失败
+- XML生成问题
+- 模板合并逻辑错误
 
 **解决方案**：
-```bash
-# 创建配置目录和文件
-mkdir -p src/main/resources/zabbix
-# 创建主监控项配置（文件名必须包含master）
-touch src/main/resources/zabbix/master_prometheus_business_template.properties
-# 创建业务监控项配置（文件名根据你的服务名）
-touch src/main/resources/zabbix/your-service-name_business_template.properties
-```
+1. 检查Properties文件格式
+2. 确认discovery_rules配置正确
+3. 查看详细日志了解具体问题
 
 ---
 
-### 6. 插件未响应
-
-**现象**：
-点击按钮或执行命令无反应
-
-**解决方案**：
-1. 重启Cursor：`Cmd/Ctrl + Shift + P` -> "Reload Window"
-2. 检查插件是否正常加载：查看扩展列表
-3. 查看Cursor开发者工具：`Help` -> `Toggle Developer Tools`
-4. 重新安装插件
-
----
-
-### 7. 主监控项冲突
+### 6. LLD宏占位符未替换
 
 **错误信息**：
 ```
-Item with key "master.prometheus[{$EXPORTTOOL_URL}]" already exists
+监控项名称显示为原始占位符，如 {#COUNTTYPE}
 ```
 
 **原因**：
-多个模板都配置了相同的主监控项key
+- LLD宏定义错误
+- 预处理参数不匹配
+- Prometheus数据源问题
 
 **解决方案**：
-采用"主监控项智能共享"架构：
-1. 将主监控项配置独立到 `src/main/resources/zabbix/master_prometheus_business_template.properties` 文件（文件名必须包含master）
-2. 业务监控项在 `{serviceName}_business_template.properties` 中配置
-3. 插件会自动扫描同级目录的master模板文件并处理：读取主监控项key，检查Zabbix中是否存在
-   - 已存在：覆盖更新
-   - 不存在：自动导入
-
-详见 [主监控项智能共享架构](../README.md#架构说明)
+1. 检查LLD宏定义是否正确
+2. 确认预处理参数与Prometheus数据匹配
+3. 验证主监控项数据是否正常
 
 ---
 
-### 8. 监控项显示"不支持"
-
-**错误现象**：
-在Zabbix中监控项状态显示"不支持"
-
-**原因**：
-- 主机没有链接主监控项模板
-- master_item引用错误
-- 主监控项模板未导入
-
-**解决方案**：
-1. 确认主机已链接 `S17 Prometheus Master Item Template`
-2. 检查业务监控项的 `master_item` 配置是否正确：
-   ```properties
-   zabbix.items[0].master_item="master.prometheus[{$EXPORTTOOL_URL}]"
-   ```
-3. 确认主监控项模板已在Zabbix中创建
-
----
-
-### 9. WebDAV连接失败
+### 7. NextCloud目录不存在
 
 **错误信息**：
 ```
-WebDAV connection failed
+NextCloud目录不存在: zabbix_template_release
 ```
 
 **原因**：
-- WebDAV用户名配置错误
-- NextCloud服务器不可达
-- SSL证书问题
+- 首次使用合并模板功能
+- NextCloud上还没有创建相应目录
+- 目录路径配置错误
 
 **解决方案**：
-1. 检查WebDAV文件空间用户名：
-   ```
-   登录 NextCloud → 文件设置 → WebDAV
-   复制显示的用户名（可能与登录用户名不同）
-   ```
-2. 在插件设置中配置正确的WebDAV用户名
-3. 检查NextCloud服务器地址是否可访问
-4. 如有SSL证书问题，可在浏览器中先访问NextCloud并信任证书
+1. 在NextCloud中手动创建目录：`/云平台开发部/监控模板/zabbix_template_release/`
+2. 使用传统方式先发布一个模板到NextCloud
+3. 检查basePath配置是否正确
 
 ---
 
-### 10. 发布成功但文件未上传
+### 8. 合并模板时找不到Release模板
 
-**现象**：
-插件显示发布成功，但NextCloud中找不到文件
+**错误信息**：
+```
+无法找到Release模板，请稍后重试
+```
 
 **原因**：
-- Template Base Path配置错误
-- NextCloud目录不存在
-- 文件被上传到错误的位置
+- 文件刚上传，WebDAV缓存未更新
+- listFiles解析响应失败
+- 网络连接问题
 
 **解决方案**：
-1. 检查插件配置中的 `Template Base Path`
-2. 在NextCloud中手动创建根目录：
-   ```
-   登录 NextCloud → 文件 → 新建文件夹
-   创建目录：/云平台开发部/监控模板
-   ```
-3. 查看插件输出日志确认实际上传路径
-4. 如使用自定义路径，确保目录已提前创建
+1. 等待1-2分钟后重试
+2. 检查NextCloud连接状态
+3. 手动验证目录中是否有XML文件
+4. 查看详细日志了解具体错误
 
 ---
 
-## 性能问题
+### 9. 模板合并时出现Key冲突
 
-### 发布速度慢
+**错误信息**：
+```
+检测到重复监控项Key: xxx
+```
 
 **原因**：
-- NextCloud服务器响应慢
-- 网络带宽限制
-- 模板文件过大
+- 多个模板定义了相同的监控项Key
+- 模板依赖关系处理不当
 
-**优化方案**：
-- 检查网络连接质量
-- 联系NextCloud管理员检查服务器性能
-- 简化模板配置，减少不必要的监控项
+**解决方案**：
+1. 检查各模板的监控项Key是否重复
+2. 确保主监控项模板和业务模板的Key不冲突
+3. 查看合并日志了解具体冲突项
+4. 修改冲突的Key名称
 
 ---
 
-## 获取帮助
+### 10. Dev测试时Zabbix连接失败
 
-如果以上方案无法解决问题：
+**错误信息**：
+```
+未配置测试Zabbix环境
+```
 
-1. **查看日志**：
-   - Cursor输出面板日志
-   - NextCloud日志
-   - Zabbix日志
+**原因**：
+- 未配置测试Zabbix连接信息
+- Zabbix服务器不可访问
+- 认证信息错误
 
-2. **检查环境**：
-   - Cursor版本
-   - 插件版本
-   - NextCloud版本
-   - Zabbix版本
+**解决方案**：
+1. 在插件设置中配置测试Zabbix环境
+2. 确认Zabbix服务器可访问
+3. 验证用户名和密码正确
+4. 检查网络连接
 
-3. **联系支持**：
-   - 提供详细的错误信息
-   - 提供相关配置（脱敏后）
-   - 提供完整的日志输出
+---
 
+### 11. 文件冲突："本文档在编辑器外被更改"
+
+**错误信息**：
+```
+本文档在编辑器外被更改。无法应用更改。
+```
+
+**原因**：
+- 文件在编辑器中修改的同时，在外部也被修改
+- 多个用户同时编辑同一文件
+- 版本控制系统自动更新文件
+- 文件被其他程序修改
+
+**解决方案**：
+
+**立即解决**：
+1. **使用保存的版本**（推荐）：点击"使用保存的版本"按钮，保留最新修改
+2. **使用当前版本**：点击"使用当前版本"按钮，保留当前编辑内容
+3. **手动合并**：如果两个版本都有重要修改，需要手动合并
+
+**预防措施**：
+1. **编辑前检查**：编辑文件前确认没有其他人在修改
+2. **及时保存**：编辑完成后立即保存文件
+3. **版本控制**：使用Git等版本控制系统管理文件变更
+4. **文件锁定**：在团队协作中使用文件锁定机制
+5. **定期同步**：定期从服务器拉取最新版本
+
+**最佳实践**：
+- 编辑重要文件前先备份
+- 使用版本控制系统跟踪所有变更
+- 团队协作时建立文件编辑规范
+- 定期检查文件修改时间戳
+
+---
+
+### 12. WebDAV上传文件冲突
+
+**错误信息**：
+```
+本文档在编辑器外被更改。无法应用更改。
+（通过WebDAV自动上传时出现）
+```
+
+**原因**：
+- 多个进程同时上传同一文件
+- WebDAV缓存更新延迟
+- NextCloud文件锁定机制冲突
+- 网络延迟导致的上传时序问题
+- 文件在上传过程中被其他操作修改
+
+**解决方案**：
+
+**立即解决**：
+1. **选择"使用保存的版本"**：保留WebDAV上传的最新版本
+2. **重新运行上传流程**：确保文件状态一致
+3. **检查上传日志**：查看详细的上传过程日志
+
+**代码层面改进**：
+1. **文件覆盖策略**：上传前先删除已存在的文件
+2. **增加等待时间**：上传后等待文件写入完成
+3. **重试机制优化**：增加重试间隔和次数
+4. **并发控制**：避免同时上传同一文件
+5. **缓存刷新机制**：使用PROPFIND强制刷新NextCloud缓存
+6. **版本检查**：通过ETag和Last-Modified检查文件版本
+7. **无缓存请求**：验证时使用Cache-Control头避免缓存问题
+8. **文件锁定清除**：使用UNLOCK方法清除NextCloud文件锁定状态
+9. **强制同步**：使用If-None-Match头强制获取最新文件内容
+
+**预防措施**：
+1. **避免并发上传**：确保同一时间只有一个进程上传文件
+2. **增加上传间隔**：在连续上传之间添加适当延迟
+3. **文件版本管理**：使用时间戳或版本号区分文件
+4. **监控上传状态**：实时监控上传进度和结果
+
+**最佳实践**：
+- 使用队列机制管理文件上传
+- 实现文件上传的幂等性
+- 添加文件完整性验证
+- 建立上传失败的重试策略
+
+---
+
+### 13. NextCloud分享链接访问问题
+
+**错误信息**：
+```
+访问链接提示"未找到页面"
+```
+
+**原因**：
+- NextCloud文件访问URL编码问题
+- 路径结构不正确
+- 权限配置问题
+
+**解决方案**：
+
+**代码层面改进**：
+1. **使用分享链接**：优先使用NextCloud官方分享链接而不是直接文件访问链接
+2. **正确的URL编码**：分段编码路径，避免斜杠被错误编码
+3. **分享链接创建**：自动创建公开分享链接，确保文件可访问
+
+**手动解决方案**：
+1. **检查文件权限**：确保文件有正确的读取权限
+2. **使用NextCloud Web界面**：通过Web界面手动创建分享链接
+3. **检查路径编码**：确保URL中的中文字符正确编码
+
+**最佳实践**：
+- 优先使用分享链接而不是直接文件访问
+- 定期检查分享链接的有效性
+- 使用NextCloud官方API创建分享链接
+
+**服务器端解决方案**：
+如果代码层面的改进仍然无法解决问题，可以尝试以下服务器端操作：
+
+1. **清除NextCloud文件锁定**：
+   ```bash
+   # 在NextCloud服务器上执行
+   sudo -u www-data php occ files:scan --all
+   sudo -u www-data php occ maintenance:repair
+   ```
+
+2. **清除数据库锁定记录**：
+   ```sql
+   -- 连接到NextCloud数据库
+   DELETE FROM oc_file_locks WHERE 1;
+   ```
+
+3. **调整NextCloud配置**：
+   在 `config.php` 中添加：
+   ```php
+   'filelocking.enabled' => false,
+   ```
+
+4. **重启NextCloud服务**：
+   ```bash
+   sudo systemctl restart apache2  # 或 nginx
+   sudo systemctl restart php8.1-fpm
+   ```
+
+---
+
+## 📞 获取帮助
+
+如果以上解决方案无法解决问题，请：
+
+1. **查看详细日志**：`Ctrl + Shift + U` → 选择 "Zabbix Template Publisher"
+2. **测试连接**：`Ctrl + Shift + P` → "Zabbix Template Publisher: Test NextCloud Connection"
+3. **联系技术支持**：提供详细的错误日志和配置信息
+
+---
+
+## 🔄 版本更新
+
+### V2.0.0 重要变更
+- 新增合并模板功能，解决Zabbix模板依赖冲突问题
+- 新增Dev/Release双环境工作流
+- 优化了菜单名称和用户体验
+- 支持从NextCloud拉取Release模板进行合并
+
+### 升级指南
+1. 更新插件到最新版本
+2. 重新配置NextCloud连接
+3. 使用新的🔧开发测试和🚀生产发布菜单
+4. 参考[合并模板使用指南](merged-template-guide.md)了解新功能
+
+### 新功能说明
+- **🔧 开发测试**：本地测试合并模板，不影响生产环境
+- **🚀 生产发布**：正式发布合并模板到NextCloud
+- **自动合并**：自动解决模板依赖冲突问题
+- **版本管理**：支持Release环境模板版本管理

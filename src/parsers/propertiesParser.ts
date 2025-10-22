@@ -216,25 +216,29 @@ export class PropertiesParser {
         const rules: DiscoveryRule[] = [];
         let index = 0;
 
-        while (config[`zabbix.discovery_rules[${index}].name`]) {
+        // 支持两种格式：zabbix.discovery[0] 和 zabbix.discovery_rules[0]
+        while (config[`zabbix.discovery_rules[${index}].name`] || config[`zabbix.discovery[${index}].name`]) {
+            // 优先使用 zabbix.discovery[0] 格式，回退到 zabbix.discovery_rules[0]
+            const baseKey = config[`zabbix.discovery[${index}].name`] ? 'zabbix.discovery' : 'zabbix.discovery_rules';
+            
             const rule: DiscoveryRule = {
-                name: config[`zabbix.discovery_rules[${index}].name`] || '',
-                key: config[`zabbix.discovery_rules[${index}].key`] || '',
-                type: config[`zabbix.discovery_rules[${index}].type`] || 'DEPENDENT',
-                delay: config[`zabbix.discovery_rules[${index}].delay`],
-                lifetime: config[`zabbix.discovery_rules[${index}].lifetime`],
-                masterItem: config[`zabbix.discovery_rules[${index}].master_item`],
-                preprocessingType: config[`zabbix.discovery_rules[${index}].preprocessing_type`],
-                preprocessingParams: config[`zabbix.discovery_rules[${index}].preprocessing_params`],
-                lldMacros: config[`zabbix.discovery_rules[${index}].lld_macros`],
-                appName: config[`zabbix.discovery_rules[${index}].appName`] || ''
+                name: config[`${baseKey}[${index}].name`] || '',
+                key: config[`${baseKey}[${index}].key`] || '',
+                type: config[`${baseKey}[${index}].type`] || 'DEPENDENT',
+                delay: config[`${baseKey}[${index}].delay`],
+                lifetime: config[`${baseKey}[${index}].lifetime`],
+                masterItem: config[`${baseKey}[${index}].master_item`],
+                preprocessingType: config[`${baseKey}[${index}].preprocessing_type`],
+                preprocessingParams: config[`${baseKey}[${index}].preprocessing_params`],
+                lldMacros: config[`${baseKey}[${index}].lld_macros`],
+                appName: config[`${baseKey}[${index}].appName`] || ''
             };
 
             // 解析item_prototype
-            if (config[`zabbix.discovery_rules[${index}].item_prototype.name`]) {
+            if (config[`${baseKey}[${index}].item_prototype.name`]) {
                 rule.itemPrototype = {
-                    name: config[`zabbix.discovery_rules[${index}].item_prototype.name`] || '',
-                    key: config[`zabbix.discovery_rules[${index}].item_prototype.key`] || ''
+                    name: config[`${baseKey}[${index}].item_prototype.name`] || '',
+                    key: config[`${baseKey}[${index}].item_prototype.key`] || ''
                 };
             }
 

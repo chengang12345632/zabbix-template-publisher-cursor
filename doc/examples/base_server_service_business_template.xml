@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2025-10-22T11:00:00Z</date>
+    <groups>
+        <group>
+            <name>business_monitor</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>base_server_service_business_template</template>
+            <name>base_server_service_business_template</name>
+            <description>Server 服务业务监控模板 - 监控设备数量统计（按租户、应用、类型等维度）</description>
+            <groups>
+                <group>
+                    <name>business_monitor</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>base_server_service</name>
+                </application>
+            </applications>
+            <templates>
+                <template>
+                    <name>master_prometheus_business_template</name>
+                </template>
+            </templates>
+            <discovery_rules>
+                <discovery_rule>
+                    <name>saas_server_deviceCount</name>
+                    <type>DEPENDENT</type>
+                    <key>saas_server_deviceCount.discovery</key>
+                    <delay>0</delay>
+                    <lifetime>3d</lifetime>
+                    <description>发现所有设备数量统计指标，按租户、应用、类型等维度动态创建监控项</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>Device Count: [{#COUNTTYPE}] [appId:{#APPID}] [tenantId:{#TENANTID}]</name>
+                            <type>DEPENDENT</type>
+                            <key>saas_server_deviceCount[{#COUNTTYPE},{#APPID},{#TENANTID}]</key>
+                            <delay>0</delay>
+                            <value_type>FLOAT</value_type>
+                            <description>设备数量统计
+- Count Type: {#COUNTTYPE} (online=在线数, total=总数)
+- AppId: {#APPID}
+- TenantId: {#TENANTID}</description>
+                            <applications>
+                                <application>
+                                    <name>base_server_service</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>PROMETHEUS_PATTERN</type>
+                                    <params>saas_server_deviceCount{countType="{#COUNTTYPE}",appId="{#APPID}",tenantId="{#TENANTID}"}
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#APPID}</lld_macro>
+                            <path>$.labels['appId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#COUNTTYPE}</lld_macro>
+                            <path>$.labels['countType']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SOURCE}</lld_macro>
+                            <path>$.labels['source']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#TENANTID}</lld_macro>
+                            <path>$.labels['tenantId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METRIC_NAME}</lld_macro>
+                            <path>$['name']</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_TO_JSON</type>
+                            <params>saas_server_deviceCount{}</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+        </template>
+    </templates>
+</zabbix_export>
+

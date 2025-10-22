@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zabbix_export>
+    <version>5.0</version>
+    <date>2025-10-22T10:30:00Z</date>
+    <groups>
+        <group>
+            <name>business_monitor</name>
+        </group>
+    </groups>
+    <templates>
+        <template>
+            <template>base_gateway_service_business_template</template>
+            <name>base_gateway_service_business_template</name>
+            <description>Gateway 网关服务业务监控模板 - 监控 API 调用统计（按 URL、方法、状态等维度）</description>
+            <groups>
+                <group>
+                    <name>business_monitor</name>
+                </group>
+            </groups>
+            <applications>
+                <application>
+                    <name>base_gateway_service</name>
+                </application>
+            </applications>
+            <templates>
+                <template>
+                    <name>master_prometheus_business_template</name>
+                </template>
+            </templates>
+            <discovery_rules>
+                <discovery_rule>
+                    <name>saas_gateway_api_counter_times</name>
+                    <type>DEPENDENT</type>
+                    <key>saas_gateway_api_counter_times.discovery</key>
+                    <delay>0</delay>
+                    <lifetime>3d</lifetime>
+                    <description>发现所有 Gateway API 调用统计指标，按 URL、方法、状态等维度动态创建监控项</description>
+                    <item_prototypes>
+                        <item_prototype>
+                            <name>API Counter: [{#URL}] [{#METHOD}] [{#STATE}]</name>
+                            <type>DEPENDENT</type>
+                            <key>saas_gateway_api_counter_times[{#URL},{#METHOD},{#STATE},{#SOURCE},{#APPID},{#TENANTID}]</key>
+                            <delay>0</delay>
+                            <value_type>FLOAT</value_type>
+                            <description>API 调用次数统计
+- URL: {#URL}
+- Method: {#METHOD}
+- State: {#STATE}
+- Source: {#SOURCE}
+- AppId: {#APPID}
+- TenantId: {#TENANTID}</description>
+                            <applications>
+                                <application>
+                                    <name>base_gateway_service</name>
+                                </application>
+                            </applications>
+                            <preprocessing>
+                                <step>
+                                    <type>PROMETHEUS_PATTERN</type>
+                                    <params>saas_gateway_api_counter_times{url="{#URL}",method="{#METHOD}",state="{#STATE}",source="{#SOURCE}",appId="{#APPID}",tenantId="{#TENANTID}"}
+</params>
+                                </step>
+                            </preprocessing>
+                            <master_item>
+                                <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                            </master_item>
+                        </item_prototype>
+                    </item_prototypes>
+                    <master_item>
+                        <key>master.prometheus[{$EXPORTTOOL_URL}]</key>
+                    </master_item>
+                    <lld_macro_paths>
+                        <lld_macro_path>
+                            <lld_macro>{#APPID}</lld_macro>
+                            <path>$.labels['appId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METHOD}</lld_macro>
+                            <path>$.labels['method']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#SOURCE}</lld_macro>
+                            <path>$.labels['source']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#STATE}</lld_macro>
+                            <path>$.labels['state']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#TENANTID}</lld_macro>
+                            <path>$.labels['tenantId']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#URL}</lld_macro>
+                            <path>$.labels['url']</path>
+                        </lld_macro_path>
+                        <lld_macro_path>
+                            <lld_macro>{#METRIC_NAME}</lld_macro>
+                            <path>$['name']</path>
+                        </lld_macro_path>
+                    </lld_macro_paths>
+                    <preprocessing>
+                        <step>
+                            <type>PROMETHEUS_TO_JSON</type>
+                            <params>saas_gateway_api_counter_times{}</params>
+                        </step>
+                    </preprocessing>
+                </discovery_rule>
+            </discovery_rules>
+        </template>
+    </templates>
+</zabbix_export>
+

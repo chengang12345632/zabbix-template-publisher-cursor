@@ -52,6 +52,7 @@ export interface DiscoveryRule {
     type: string;
     delay?: string;
     lifetime?: string;
+    description?: string;
     masterItem?: string;
     preprocessingType?: string;
     preprocessingParams?: string;
@@ -63,6 +64,16 @@ export interface DiscoveryRule {
 export interface ItemPrototype {
     name: string;
     key: string;
+    type?: string;
+    delay?: string;
+    valueType?: string;
+    description?: string;
+    masterItem?: string;
+    preprocessing?: {
+        type?: string;
+        params?: string;
+    };
+    appName?: string;
 }
 
 /**
@@ -83,7 +94,6 @@ export interface PluginConfig {
         password: string;
         basePath: string;
     };
-    version?: string;
     zabbix?: {
         url: string;
         username: string;

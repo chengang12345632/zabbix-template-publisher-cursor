@@ -8,6 +8,7 @@ import { ZabbixClient } from './clients/zabbixClient';
 import { PomReader } from './utils/pomReader';
 import { Logger } from './utils/logger';
 import { PluginConfig, PublishResult } from './types/zabbix';
+import { MergedTemplateService } from './services/mergedTemplateService';
 
 // 存储上传文件的URL
 interface UploadedFile {
@@ -26,13 +27,6 @@ export function activate(context: vscode.ExtensionContext) {
     Logger.initialize(context);
     Logger.info('Zabbix Template Publisher 已激活');
 
-    // 注册发布命令
-    const publishCommand = vscode.commands.registerCommand(
-        'zabbix-template-publisher.publish',
-        async (uri?: vscode.Uri) => {
-            await publishTemplate(uri);
-        }
-    );
 
     // 注册测试连接命令
     const testConnectionCommand = vscode.commands.registerCommand(
@@ -42,7 +36,27 @@ export function activate(context: vscode.ExtensionContext) {
         }
     );
 
-    context.subscriptions.push(publishCommand, testConnectionCommand);
+    // 注册Dev环境命令 - 生成并测试合并模板
+    const devMergeCommand = vscode.commands.registerCommand(
+        'zabbix-template-publisher.devMerge',
+        async (uri?: vscode.Uri) => {
+            await devMergeAndTest(uri);
+        }
+    );
+
+    // 注册Release环境命令 - 发布到生产环境
+    const releaseMergeCommand = vscode.commands.registerCommand(
+        'zabbix-template-publisher.releaseMerge',
+        async (uri?: vscode.Uri) => {
+            await releaseMergeAndPublish(uri);
+        }
+    );
+
+    context.subscriptions.push(
+        testConnectionCommand,
+        devMergeCommand,
+        releaseMergeCommand
+    );
 }
 
 /**
@@ -165,158 +179,6 @@ async function testNextCloudConnection(): Promise<void> {
     }
 }
 
-/**
- * 发布模板主流程
- */
-async function publishTemplate(uri?: vscode.Uri): Promise<void> {
-    // 清空日志并显示
-    Logger.clear();
-    Logger.separator();
-    Logger.info('开始发布Zabbix模板');
-    Logger.separator();
-    
-    try {
-        // 获取配置文件路径
-        const propertiesFile = await getPropertiesFilePath(uri);
-        if (!propertiesFile) {
-            Logger.error('未选择有效的模板文件');
-            const result = await vscode.window.showErrorMessage(
-                '请选择一个 .properties 或 .xml 文件',
-                '查看日志'
-            );
-            if (result === '查看日志') {
-                Logger.show();
-            }
-            return;
-        }
-
-        Logger.info(`选择的文件: ${propertiesFile}`);
-
-        // 显示进度条
-        await vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: "发布Zabbix模板",
-            cancellable: false
-        }, async (progress) => {
-            
-            // 步骤1: 读取配置
-            progress.report({ increment: 10, message: "读取配置..." });
-            Logger.info('步骤1: 读取配置');
-            const config = await loadConfig();
-            if (!config) {
-                return;
-            }
-
-            // 步骤2: 处理配置文件
-            progress.report({ increment: 10, message: "处理配置文件..." });
-            Logger.info('步骤2: 处理配置文件');
-            
-            let xmlFiles: { fileName: string; content: string; template: any }[] = [];
-            
-            // 检查是否为XML文件
-            if (propertiesFile.toLowerCase().endsWith('.xml')) {
-                Logger.info('检测到XML文件，直接读取内容');
-                const xmlContent = fs.readFileSync(propertiesFile, 'utf8');
-                const fileName = path.basename(propertiesFile);
-                
-                // 尝试从XML中提取模板名称（用于Zabbix导入时的模板识别）
-                const templateName = extractTemplateNameFromXml(xmlContent);
-                
-                xmlFiles.push({ 
-                    fileName, 
-                    content: xmlContent, 
-                    template: { name: templateName || fileName.replace('.xml', '') } 
-                });
-                Logger.success(`✓ 读取XML文件: ${fileName} (${xmlContent.length} bytes)`);
-            } else {
-                // 处理Properties文件
-                const propertiesFiles = await findRelatedPropertiesFiles(propertiesFile);
-                Logger.info(`找到 ${propertiesFiles.length} 个相关文件`, propertiesFiles);
-                
-                const templates = [];
-                for (const file of propertiesFiles) {
-                    Logger.info(`解析文件: ${path.basename(file)}`);
-                    const propertiesConfig = PropertiesParser.parseFile(file);
-                    const template = PropertiesParser.toZabbixTemplate(propertiesConfig);
-                    templates.push({ file, template });
-                    Logger.success(`✓ 解析成功: ${template.name}`);
-                }
-
-                // 步骤3: 转换为XML
-                progress.report({ increment: 10, message: "转换为XML格式..." });
-                Logger.separator();
-                Logger.info('步骤3: 转换为XML格式');
-                
-                for (const { file, template } of templates) {
-                    const xmlContent = XmlConverter.toXml(template);
-                    const fileName = path.basename(file).replace('.properties', '.xml');
-                    xmlFiles.push({ fileName, content: xmlContent, template });
-                    Logger.success(`✓ 生成XML: ${fileName} (${xmlContent.length} bytes)`);
-                }
-            }
-
-            // 步骤4: 上传到NextCloud
-            progress.report({ increment: 20, message: "上传到NextCloud..." });
-            Logger.separator();
-            Logger.info('步骤4: 上传到NextCloud');
-            const version = await getVersion(config, propertiesFile);
-            Logger.info(`版本号: ${version}`);
-            const uploadedFiles = await uploadToNextCloud(xmlFiles, config, version);
-            lastUploadedFiles = uploadedFiles;
-
-            // 步骤5: 导入到Zabbix（如果配置了）
-            let zabbixImported = false;
-            if (config.zabbix) {
-                progress.report({ increment: 20, message: "导入到Zabbix测试环境..." });
-                Logger.separator();
-                Logger.info('步骤5: 导入到Zabbix测试环境');
-                zabbixImported = await importToZabbix(xmlFiles, config);
-            }
-
-            // 步骤6: 完成
-            progress.report({ increment: 20, message: "完成!" });
-            Logger.separator();
-            Logger.success('🎉 所有步骤完成！');
-            Logger.separator();
-            
-            const isXmlFile = propertiesFile.toLowerCase().endsWith('.xml');
-            const fileType = isXmlFile ? 'XML模板' : 'Properties配置';
-            const processType = isXmlFile ? '直接上传' : '转换并上传';
-            
-            const message = zabbixImported 
-                ? `模板发布成功！\n- ${processType}到NextCloud (版本: ${version})\n- 已导入到Zabbix测试环境\n- 处理了 ${xmlFiles.length} 个${fileType}文件`
-                : `模板发布成功！\n- ${processType}到NextCloud (版本: ${version})\n- 处理了 ${xmlFiles.length} 个${fileType}文件`;
-            
-            // 显示成功消息，带按钮
-            const result = await vscode.window.showInformationMessage(
-                message,
-                '查看日志',
-                '打开文档'
-            );
-            
-            if (result === '查看日志') {
-                Logger.show();
-            } else if (result === '打开文档') {
-                openNextCloudFiles(uploadedFiles, config);
-            }
-        });
-
-    } catch (error: any) {
-        Logger.separator();
-        Logger.error('发布失败', error);
-        Logger.separator();
-        
-        // 显示错误消息，带按钮
-        const result = await vscode.window.showErrorMessage(
-            `发布失败: ${error.message}`,
-            '查看日志'
-        );
-        
-        if (result === '查看日志') {
-            Logger.show();
-        }
-    }
-}
 
 /**
  * 获取Properties文件路径
@@ -324,7 +186,7 @@ async function publishTemplate(uri?: vscode.Uri): Promise<void> {
 async function getPropertiesFilePath(uri?: vscode.Uri): Promise<string | undefined> {
     // 优先使用传入的URI（来自右键菜单）
     if (uri) {
-        Logger.info('从右键菜单获取文件:', uri.fsPath);
+        Logger.debug('从右键菜单获取文件:', uri.fsPath);
         if (uri.fsPath.endsWith('.properties') || uri.fsPath.endsWith('.xml')) {
             return uri.fsPath;
         } else {
@@ -339,13 +201,13 @@ async function getPropertiesFilePath(uri?: vscode.Uri): Promise<string | undefin
     if (editor) {
         const fileName = editor.document.fileName;
         if (fileName.endsWith('.properties') || fileName.endsWith('.xml')) {
-            Logger.info('从活动编辑器获取文件:', fileName);
+            Logger.debug('从活动编辑器获取文件:', fileName);
             return fileName;
         }
     }
 
     // 最后才让用户选择文件
-    Logger.info('打开文件选择对话框');
+    Logger.debug('打开文件选择对话框');
     const files = await vscode.window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: false,
@@ -368,7 +230,7 @@ async function findRelatedPropertiesFiles(businessPropertiesFile: string): Promi
     
     // 如果是XML文件，直接返回该文件，不查找相关文件
     if (businessPropertiesFile.toLowerCase().endsWith('.xml')) {
-        Logger.info('检测到XML文件，跳过查找相关properties文件');
+        Logger.debug('检测到XML文件，跳过查找相关properties文件');
         files.push(businessPropertiesFile);
         return files;
     }
@@ -376,7 +238,7 @@ async function findRelatedPropertiesFiles(businessPropertiesFile: string): Promi
     // 规范化路径以便比较（解决Windows路径大小写和反斜杠问题）
     const normalizedBusinessFile = path.normalize(businessPropertiesFile).toLowerCase();
     
-    Logger.info('扫描同级目录，查找主监控项模板...');
+    Logger.debug('扫描同级目录，查找主监控项模板...');
     
     try {
         // 读取同级目录下的所有文件
@@ -393,7 +255,7 @@ async function findRelatedPropertiesFiles(businessPropertiesFile: string): Promi
                 // 不要将自己当作master文件（如果业务文件名包含master）
                 if (normalizedPath !== normalizedBusinessFile) {
                     masterFiles.push(fullPath);
-                    Logger.info(`  - 发现主监控项模板: ${file}`);
+                    Logger.debug(`  - 发现主监控项模板: ${file}`);
                 }
             }
         }
@@ -427,14 +289,14 @@ async function loadConfig(): Promise<PluginConfig | undefined> {
     const nextcloudPassword = config.get<string>('nextcloud.password');
 
     // 调试日志：显示读取的配置值
-    Logger.info('========================================');
-    Logger.info('从VSCode配置中读取的原始值:');
-    Logger.info(`  - nextcloud.url: ${nextcloudUrl || '(未配置)'}`);
-    Logger.info(`  - nextcloud.username (认证用户名): ${nextcloudUsername || '(未配置)'}`);
-    Logger.info(`  - nextcloud.webdavUsername (WebDAV路径用户名): ${nextcloudWebdavUsername || '(未配置，将使用username)'}`);
-    Logger.info(`  - nextcloud.password: ${nextcloudPassword ? '已配置 (' + nextcloudPassword.substring(0, 5) + '***)' : '(未配置!)'}`);
-    Logger.info(`  - nextcloud.basePath: ${config.get<string>('nextcloud.basePath') || '(未配置，将使用默认值)'}`);
-    Logger.info('========================================');
+    Logger.debug('========================================');
+    Logger.debug('从VSCode配置中读取的原始值:');
+    Logger.debug(`  - nextcloud.url: ${nextcloudUrl || '(未配置)'}`);
+    Logger.debug(`  - nextcloud.username (认证用户名): ${nextcloudUsername || '(未配置)'}`);
+    Logger.debug(`  - nextcloud.webdavUsername (WebDAV路径用户名): ${nextcloudWebdavUsername || '(未配置，将使用username)'}`);
+    Logger.debug(`  - nextcloud.password: ${nextcloudPassword ? '已配置 (' + nextcloudPassword.substring(0, 5) + '***)' : '(未配置!)'}`);
+    Logger.debug(`  - nextcloud.basePath: ${config.get<string>('nextcloud.basePath') || '(未配置，将使用默认值)'}`);
+    Logger.debug('========================================');
 
     if (!nextcloudUrl || !nextcloudUsername || !nextcloudPassword) {
         Logger.error('配置检查失败: 必需的配置项缺失');
@@ -461,16 +323,15 @@ async function loadConfig(): Promise<PluginConfig | undefined> {
             webdavUsername: nextcloudWebdavUsername || nextcloudUsername, // 如果未配置，使用登录用户名
             password: nextcloudPassword,
             basePath: config.get<string>('nextcloud.basePath') || '/云平台开发部/监控模板'
-        },
-        version: config.get<string>('version')
+        }
     };
 
     // 调试日志：显示最终配置
-    Logger.info('组装后的最终配置对象:');
-    Logger.info(`  - 认证用户名 (username): ${pluginConfig.nextcloud.username}`);
-    Logger.info(`  - WebDAV路径用户名 (webdavUsername): ${pluginConfig.nextcloud.webdavUsername}`);
-    Logger.info(`  - 密码: ${pluginConfig.nextcloud.password ? '已配置 (' + pluginConfig.nextcloud.password.substring(0, 5) + '***)' : '未配置'}`);
-    Logger.info('========================================');
+    Logger.debug('组装后的最终配置对象:');
+    Logger.debug(`  - 认证用户名 (username): ${pluginConfig.nextcloud.username}`);
+    Logger.debug(`  - WebDAV路径用户名 (webdavUsername): ${pluginConfig.nextcloud.webdavUsername}`);
+    Logger.debug(`  - 密码: ${pluginConfig.nextcloud.password ? '已配置 (' + pluginConfig.nextcloud.password.substring(0, 5) + '***)' : '未配置'}`);
+    Logger.debug('========================================');
 
     // Zabbix配置（可选）
     const zabbixUrl = config.get<string>('zabbix.url');
@@ -491,12 +352,8 @@ async function loadConfig(): Promise<PluginConfig | undefined> {
 /**
  * 获取版本号
  */
+// 此函数已废弃，不再使用版本号配置
 async function getVersion(config: PluginConfig, propertiesFile: string): Promise<string> {
-    // 优先使用配置的版本号
-    if (config.version) {
-        return config.version;
-    }
-
     // 从pom.xml读取
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
@@ -586,7 +443,7 @@ async function importToZabbix(
         // 确保所有主机组存在
         if (allGroups.size > 0) {
             Logger.separator();
-            Logger.info('检查并创建必需的主机组...');
+            Logger.debug('检查并创建必需的主机组...');
             await client.ensureHostGroups(Array.from(allGroups));
             Logger.separator();
         }
@@ -594,13 +451,13 @@ async function importToZabbix(
         // 按顺序导入（主监控项模板优先）
         for (let i = 0; i < xmlFiles.length; i++) {
             const xmlFile = xmlFiles[i];
-            Logger.info(`导入模板到Zabbix: ${xmlFile.template.name}`);
+            Logger.debug(`导入模板到Zabbix: ${xmlFile.template.name}`);
             await client.importTemplate(xmlFile.content, xmlFile.template.name);
             Logger.success(`✓ 导入成功: ${xmlFile.template.name}`);
             
             // 如果不是最后一个模板，添加延迟以确保依赖项生效
             if (i < xmlFiles.length - 1) {
-                Logger.info('等待依赖项生效...');
+                Logger.debug('等待依赖项生效...');
                 await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
             }
         }
@@ -647,7 +504,7 @@ function openNextCloudFiles(files: UploadedFile[], config: PluginConfig) {
         if (options.length === 1) {
             // 只有一个选项，直接打开
             vscode.env.openExternal(vscode.Uri.parse(options[0].url));
-            Logger.info(`在浏览器中打开: ${options[0].url}`);
+            Logger.debug(`在浏览器中打开: ${options[0].url}`);
         } else {
             // 显示选择
             vscode.window.showQuickPick(options, {
@@ -658,10 +515,10 @@ function openNextCloudFiles(files: UploadedFile[], config: PluginConfig) {
                         // 复制分享链接到剪贴板
                         vscode.env.clipboard.writeText(selected.url);
                         vscode.window.showInformationMessage(`✅ 分享链接已复制到剪贴板: ${selected.url}`);
-                        Logger.info(`分享链接已复制: ${selected.url}`);
+                        Logger.debug(`分享链接已复制: ${selected.url}`);
                     } else {
                         vscode.env.openExternal(vscode.Uri.parse(selected.url));
-                        Logger.info(`在浏览器中打开: ${selected.url}`);
+                        Logger.debug(`在浏览器中打开: ${selected.url}`);
                     }
                 }
             });
@@ -684,5 +541,117 @@ function openNextCloudFiles(files: UploadedFile[], config: PluginConfig) {
             openNextCloudFiles([selected.file], config);
         }
     });
+}
+
+/**
+ * Dev环境 - 生成并测试合并模板
+ */
+async function devMergeAndTest(uri?: vscode.Uri): Promise<void> {
+    Logger.clear();
+    Logger.separator();
+    Logger.info('🔧 Dev环境 - 生成并测试合并模板');
+    Logger.separator();
+
+    try {
+        // 获取Properties文件路径
+        const propertiesFile = await getPropertiesFilePath(uri);
+        if (!propertiesFile) {
+            Logger.error('未选择有效的模板文件');
+            vscode.window.showErrorMessage('请选择一个 .properties 文件');
+            return;
+        }
+
+        // 加载配置
+        const config = await loadConfig();
+        if (!config) {
+            return;
+        }
+
+        // 显示进度条
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Dev - 生成并测试合并模板",
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ message: "处理中..." });
+            await MergedTemplateService.devMergeAndTest(propertiesFile, config);
+        });
+
+    } catch (error: any) {
+        Logger.separator();
+        Logger.error('Dev测试失败', error);
+        Logger.separator();
+
+        vscode.window.showErrorMessage(
+            `Dev测试失败: ${error.message}`,
+            '查看日志'
+        ).then(result => {
+            if (result === '查看日志') {
+                Logger.show();
+            }
+        });
+    }
+}
+
+/**
+ * Release环境 - 发布到生产环境
+ */
+async function releaseMergeAndPublish(uri?: vscode.Uri): Promise<void> {
+    Logger.clear();
+    Logger.separator();
+    Logger.info('🚀 Release环境 - 发布到生产环境');
+    Logger.separator();
+
+    try {
+        // 确认操作
+        const confirmed = await vscode.window.showWarningMessage(
+            '确定要发布到生产环境吗？\n这将上传模板到Release目录并生成新的合并模板。',
+            { modal: true },
+            '确定发布'
+        );
+
+        if (confirmed !== '确定发布') {
+            Logger.info('用户取消发布操作');
+            return;
+        }
+
+        // 获取Properties文件路径
+        const propertiesFile = await getPropertiesFilePath(uri);
+        if (!propertiesFile) {
+            Logger.error('未选择有效的模板文件');
+            vscode.window.showErrorMessage('请选择一个 .properties 文件');
+            return;
+        }
+
+        // 加载配置
+        const config = await loadConfig();
+        if (!config) {
+            return;
+        }
+
+        // 显示进度条
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "Release - 发布到生产环境",
+            cancellable: false
+        }, async (progress) => {
+            progress.report({ message: "处理中..." });
+            await MergedTemplateService.releaseMergeAndPublish(propertiesFile, config);
+        });
+
+    } catch (error: any) {
+        Logger.separator();
+        Logger.error('Release发布失败', error);
+        Logger.separator();
+
+        vscode.window.showErrorMessage(
+            `Release发布失败: ${error.message}`,
+            '查看日志'
+        ).then(result => {
+            if (result === '查看日志') {
+                Logger.show();
+            }
+        });
+    }
 }
 

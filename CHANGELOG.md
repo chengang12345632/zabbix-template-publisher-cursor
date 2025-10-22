@@ -5,6 +5,81 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并且遵守 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [2.0.0] - 2025-10-22
+
+### 重大更新 🎉
+
+- 🔄 **合并模板功能** - 解决Zabbix模板依赖冲突问题
+  - 新增XML模板解析器 (`XmlTemplateParser`)
+  - 新增模板合并器 (`TemplateMerger`)
+  - 新增合并模板服务 (`MergedTemplateService`)
+  - 智能合并多个模板为单一模板
+  - 自动处理配置冲突和依赖关系
+
+- 🔧 **Dev/Release双环境工作流**
+  - Dev环境：生成并测试合并模板（不上传到NextCloud）
+  - Release环境：发布到生产环境（上传并生成合并模板）
+  - 开发测试与生产发布完全隔离
+  - 支持快速验证和安全发布
+
+- 📦 **NextCloud增强集成**
+  - 新增 `listFiles()` - 列出目录文件
+  - 新增 `downloadFile()` - 下载文件内容
+  - 自动从 `zabbix_template_release/` 拉取Release模板
+  - 自动上传合并模板到 `zabbix_template_release/merged/`
+
+### 新增功能
+
+- ✨ 右键菜单命令
+  - `🔧 开发测试 - 生成合并模板` - Dev环境测试
+  - `🚀 生产发布 - 发布合并模板` - Release环境发布
+- ✨ 自动模板合并
+  - 合并模板组、应用分组、宏定义
+  - 合并监控项和发现规则
+  - 冲突检测和处理
+- ✨ 模板验证
+  - 验证合并后的模板完整性
+  - 检查依赖关系
+  - 检查DEPENDENT类型监控项
+
+### 配置更新
+
+- ⚙️ 新增配置项
+  - `nextcloud.releasePath` - Release环境模板目录
+  - `nextcloud.mergedPath` - 合并模板目录
+  - 更新Zabbix配置说明（明确为测试环境）
+
+### 文档更新
+
+- 📖 README更新到V4.0
+  - 添加合并模板功能说明
+  - 添加Dev/Release工作流介绍
+  - 添加使用建议和选择指南
+- 📖 新增文档
+  - `doc/merged-template-guide.md` - 合并模板使用指南
+  - `doc/merged_template_implementation_plan.md` - 实现方案文档
+- 📖 文档整合
+  - 删除重复和过时的文档
+  - 整合技术文档到BUILD.md
+
+### 技术改进
+
+- 🏗️ 新增模块
+  - `src/parsers/xmlTemplateParser.ts` - XML模板解析器
+  - `src/services/templateMerger.ts` - 模板合并器
+  - `src/services/mergedTemplateService.ts` - 合并模板服务
+- 🔧 代码重构
+  - 优化NextCloudClient
+  - 增强extension.ts命令处理
+  - 改进错误处理和日志输出
+
+### 突破性变更
+
+- ⚠️ package.json配置更新
+  - 新增右键菜单命令
+  - 更新配置项说明
+  - 命令分组优化
+
 ## [1.0.2] - 2025-10-21
 
 ### 文档优化
