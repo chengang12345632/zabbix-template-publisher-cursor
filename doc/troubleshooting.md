@@ -76,6 +76,38 @@ A:
 - **WebDAV用户名**：用于文件路径构建，通常与认证用户名相同
 - 如果两者不同，需要分别配置
 
+#### Q7.1: 如何获取WebDAV文件空间用户名？
+
+A: 按照以下步骤获取WebDAV文件空间用户名：
+
+**方法1：查看NextCloud设置**
+```
+1. 登录 NextCloud 网页版
+2. 头像 → 设置（Settings）
+3. 个人（Personal）→ 安全（Security）
+4. 在"WebDAV"部分查看用户名
+5. 通常显示格式为：用户名_数字（如：chengang_3074）
+```
+
+**方法2：查看文件路径**
+```
+1. 登录 NextCloud 网页版
+2. 进入文件目录
+3. 查看URL中的路径部分
+4. WebDAV用户名通常是路径中的第一段
+5. 例如：https://nextcloud.com/remote.php/dav/files/用户名_数字/
+```
+
+**方法3：联系管理员**
+```
+如果无法确定WebDAV用户名，可以联系NextCloud管理员获取
+```
+
+**注意事项**：
+- WebDAV用户名通常与登录用户名相同
+- 某些NextCloud配置中，WebDAV用户名可能包含后缀数字（如：username_3074）
+- 如果WebDAV用户名与登录用户名相同，可以不配置此选项
+
 ---
 
 ### 合并模板相关

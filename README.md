@@ -2,19 +2,9 @@
 
 本文档说明如何接入业务监控系统，包含监控数据生产和监控项模板维护两个核心部分。
 
-## 📋 目录
-
-- [🚀 快速开始](#-快速开始)
-- [📊 系统架构](#-系统架构)
-- [📝 监控数据生产](#-监控数据生产)
-- [🔧 模板管理](#-模板管理)
-- [✅ 验证部署](#-验证部署)
-- [❓ 常见问题](#-常见问题)
-- [📚 文档资源](#-文档资源)
-
 ---
 
-## 🚀 快速开始
+## 1. 快速开始
 
 ### 5分钟快速接入
 
@@ -23,11 +13,11 @@
 3. **发布模板**：一键发布到测试环境
 4. **验证数据**：检查监控数据是否正常
 
-> 💡 **新手推荐**：首次使用建议先阅读[模板管理](#-模板管理)部分了解基本概念
+> 💡 **新手推荐**：首次使用建议先阅读[模板管理](#4-模板管理)部分了解基本概念
 
 ---
 
-## 📊 系统架构
+## 2. 系统架构
 
 ### 整体架构图
 
@@ -104,9 +94,9 @@ graph TB
 
 ---
 
-## 📝 监控数据生产
+## 3. 监控数据生产
 
-### 监控数据生产流程
+### 3.1 监控数据生产流程
 
 ```mermaid
 graph TD
@@ -126,7 +116,7 @@ graph TD
     style G fill:#e8f5e8
 ```
 
-### 数据生产流程说明
+### 3.2 数据生产流程说明
 
 1. **数据收集**：各业务组件收集业务相关的监控指标数据
 2. **消息推送**：通过Kafka将监控数据推送到消息队列（Topic: `starry_exporter_business_monitor`）
@@ -135,7 +125,27 @@ graph TD
 5. **数据采集**：Zabbix定时拉取Prometheus格式的监控数据
 6. **数据展示**：在Zabbix中展示监控图表和触发告警
 
-### Kafka数据结构定义
+### 3.3 业务监控开关配置
+
+#### 统一开关配置
+
+为了便于统一管理业务监控的启用和禁用，系统提供了统一的CICD变量配置：
+
+| 变量名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `business_monitor_enable` | Integer | `1` | 业务监控开关（0-未启用，1-启用） |
+
+#### 配置说明
+
+- **背景**：之前各组件业务监控都定义自己的开关，在不需要的时候需要一个个单独配置，现在统一使用CICD变量配置，方便统一开关管理
+- **使用方式**：在CICD配置中设置 `business_monitor_enable` 变量
+  - 设置为 `1`：启用业务监控（默认值）
+  - 设置为 `0`：禁用业务监控
+- **生效范围**：所有业务组件的监控数据收集和推送行为都会受到此开关控制
+
+> 💡 **提示**：当需要临时关闭所有业务监控时，只需在CICD中统一设置 `business_monitor_enable=0` 即可，无需逐个组件配置
+
+### 3.4 Kafka数据结构定义
 
 业务组件通过Kafka推送的监控指标数据到Topic `starry_exporter_business_monitor`，数据格式遵循以下JSON结构：
 
@@ -178,7 +188,7 @@ graph TD
 }
 ```
 
-### 数据结构说明
+### 3.5 数据结构说明
 
 #### 消息头字段
 
@@ -258,7 +268,7 @@ public enum MetricType {
 | `appId` | Integer | 否 | 应用ID |
 | `taskStatus` | String | 否 | 任务状态，如 "success" 或 "fail" |
 
-### 监控数据生产相关组件
+### 3.6 监控数据生产相关组件
 
 | 组件 | 职责 | 技术栈 | 输出 |
 |------|------|--------|------|
@@ -267,7 +277,7 @@ public enum MetricType {
 | **Zabbix Agent** | 部署在业务主机上，用于Zabbix服务器采集监控数据。**注意：当前不支持CICD部署，需要联系运维人员部署** | Zabbix Agent | 主机监控数据 |
 | **Zabbix** | 定时拉取监控数据，存储和展示 | Zabbix | 监控图表和告警 |
 
-### ExporterTool服务部署
+### 3.7 ExporterTool服务部署
 
 ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafka中的监控数据并转换为Prometheus格式。
 
@@ -286,9 +296,9 @@ ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafk
 - **高可用**：集群部署确保服务高可用性
 - **弹性伸缩**：支持根据负载自动扩缩容
 
-## 🔧 模板管理
+## 4. 模板管理
 
-### 合并模板架构
+### 4.1 合并模板架构
 
 本系统采用**合并模板架构**，解决Zabbix模板依赖冲突问题：
 
@@ -297,9 +307,9 @@ ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafk
 - `{serviceName}_business_template.properties` - **业务监控项配置**（开发维护）
 - `merged_business_template.xml` - **合并模板**（系统自动生成）
 
-### 快速开始
+### 4.2 快速开始
 
-#### 步骤1：配置Cursor插件
+#### 4.2.1 步骤1：配置Cursor插件
 
 **安装**：Cursor → `Ctrl/Cmd + Shift + X` → 搜索 "Zabbix Template Publisher"
 
@@ -311,7 +321,7 @@ ExporterTool服务支持集群部署，通过CICD自动部署，负责消费Kafk
 - Password: 应用专用密码（[创建方法](doc/troubleshooting.md#q1-如何获取nextcloud应用专用密码)）
 
 可选项：
-- WebDAV Username: WebDAV文件空间用户名（如与登录用户名不同）
+- WebDAV Username: WebDAV文件空间用户名（通常与登录用户名相同，如不同请参考[获取方法](doc/troubleshooting.md#q71-如何获取webdav文件空间用户名)）
 - Template Base Path: 默认 `/云平台开发部/监控模板`
 
 Zabbix配置（可选，用于自动导入测试环境）：
@@ -328,7 +338,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 | `nextcloud.username` | String | 是 | - | NextCloud用户名 |
 | `nextcloud.password` | String | 是 | - | NextCloud应用专用密码 |
 | `nextcloud.templateBasePath` | String | 否 | `/云平台开发部/监控模板` | 模板存储根路径 |
-| `nextcloud.webdavUsername` | String | 否 | - | WebDAV文件空间用户名（如果与登录用户名不同）|
+| `nextcloud.webdavUsername` | String | 否 | - | WebDAV文件空间用户名（通常与登录用户名相同，如不同请参考[获取方法](doc/troubleshooting.md#q71-如何获取webdav文件空间用户名)）|
 | **Zabbix配置** |
 | `zabbix.url` | String | 否 | - | Zabbix服务器地址 |
 | `zabbix.username` | String | 否 | - | Zabbix用户名 |
@@ -341,7 +351,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 - 配置修改后需要重启Cursor才能生效
 - 建议使用应用专用密码而非登录密码，提高安全性
 
-#### 步骤2：创建业务监控项配置文件
+#### 4.2.2 步骤2：创建业务监控项配置文件
 
 在 `src/main/resources/zabbix/` 创建业务监控项配置文件：`{serviceName}_business_template.properties`
 
@@ -360,7 +370,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 
 **业务监控项配置（各组件维护）**：
 
-> 📖 完整配置说明请参考：[示例文件说明](doc/examples/README.md)
+> 📖 完整配置说明请参考：[示例文件说明](doc/examples/TEMPLATE_README.md)
 > - [告警服务示例](doc/examples/base_alarm_service_business_template.properties)
 > - [网关服务示例](doc/examples/base_gateway_service_business_template.properties)  
 > - [服务器服务示例](doc/examples/base_server_service_business_template.properties)
@@ -372,16 +382,16 @@ Zabbix配置（可选，用于自动导入测试环境）：
 > - **静态监控项**：适合固定指标（如系统总量、健康状态）
 > - **发现规则**：适合多维度场景（如多租户、多应用），配置一次自动适配
 
-#### 步骤3：发布模板
+#### 4.2.3 步骤3：发布模板
 
-##### 🎯 合并模板发布方案
+##### 合并模板发布方案
 
 **发布流程**：
 ```
 开发 → 修改.properties → 🔧 开发测试 → 验证通过 → 🚀 生产发布
 ```
 
-##### 🔧 开发测试环境
+##### 开发测试环境
 
 **操作**：右键 `.properties` 文件 → `🔧 开发测试 - 生成合并模板` → `自动导入到测试Zabbix环境`
 
@@ -391,7 +401,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 - ✅ 自动合并所有模板
 - ✅ 自动导入到测试Zabbix环境（模板名称：merged_business_template_dev）
 
-##### 🚀 生产发布环境
+##### 生产发布环境
 
 **操作**：右键 `.properties` 文件 → `🚀 生产发布 - 发布合并模板`
 
@@ -402,23 +412,23 @@ Zabbix配置（可选，用于自动导入测试环境）：
 - ✅ 上传合并模板到 `zabbix_template_release/merged/`
 - ✅ 模板名称：merged_business_template
 
-##### 📁 支持的文件格式
+##### 支持的文件格式
 
 - **`.properties`**：自动转换为XML（推荐）
 - **`.xml`**：直接上传使用
 
-##### 💡 使用建议
+##### 使用建议
 
 1. **开发流程**：先🔧开发测试验证，通过后🚀生产发布
 2. **团队分工**：
    - **运维**：维护主监控项模板到NextCloud
    - **开发**：维护业务监控项`.properties`文件
 
-## ✅ 验证部署
+## 5. 验证部署
 
-### 开发环境验证
+### 5.1 开发环境验证
 
-**验证流程**：步骤3已自动完成模板导入，需要手动完成以下验证步骤
+**验证流程**：4.2.3 步骤3已自动完成模板导入，需要手动完成以下验证步骤
 
 #### 1. 手动绑定测试主机
 
@@ -452,7 +462,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
    - 进入 `配置` → `主机` → 选择主机 → `触发器`
    - 确认告警规则已正确创建
 
-### 生产环境部署
+### 5.2 生产环境部署
 
 **运维操作**：生产环境需要运维人员手动部署
 
@@ -462,7 +472,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 3. **链接到主机**：在主机配置中链接 `merged_business_template`
 4. **验证数据**：等待5-10分钟，检查 `监测` → `最新数据`
 
-## ❓ 常见问题
+## 6. 常见问题
 
 ### 开发环境问题
 - **测试失败**：检查`.properties`文件配置
@@ -483,7 +493,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 
 ---
 
-## 📚 文档资源
+## 7. 文档资源
 
 - [合并模板使用指南](doc/merged-template-guide.md) - 合并模板功能完整说明
 - [故障排查与常见问题](doc/troubleshooting.md) - 错误诊断、解决方案、FAQ
@@ -491,7 +501,7 @@ Zabbix配置（可选，用于自动导入测试环境）：
 
 ---
 
-## 📋 版本信息
+## 8. 版本信息
 
 **文档版本**: V2.0  
 **最后更新**: 2025-01-22  
